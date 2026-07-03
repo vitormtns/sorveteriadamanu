@@ -1,13 +1,12 @@
 "use client";
 
-import { BarChart3, ClipboardList, IceCreamBowl, LogOut, Menu, PlusCircle, X } from "lucide-react";
+import { ClipboardList, IceCreamBowl, LayoutGrid, LogOut, Plus, PlusCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { BrandLogo } from "./brand-logo";
 
 const links = [
-  { href: "/", label: "Visão geral", icon: BarChart3 },
-  { href: "/pedidos/novo", label: "Novo pedido", icon: PlusCircle },
+  { href: "/", label: "Início", icon: LayoutGrid },
   { href: "/pedidos", label: "Pedidos", icon: ClipboardList },
   { href: "/produtos", label: "Produtos", icon: IceCreamBowl },
 ];
@@ -15,47 +14,48 @@ const links = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   if (pathname === "/login") return children;
 
-  const title = pathname === "/" ? "Visão geral" : pathname.includes("/novo") ? "Novo pedido" : pathname.startsWith("/produtos") ? "Produtos" : "Pedidos";
+  const title = pathname === "/" ? "Pedidos" : pathname.includes("/novo") ? "Novo pedido" : pathname.startsWith("/produtos") ? "Produtos" : "Pedidos";
+  const now = new Date();
+  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(now);
+  const month = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(now);
+  const today = `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${String(now.getDate()).padStart(2, "0")} de ${month.charAt(0).toUpperCase()}${month.slice(1)}`;
   const isActive = (href: string) => href === "/" ? pathname === "/" : pathname === href || (href === "/pedidos" && pathname.startsWith("/pedidos/") && !pathname.includes("/novo"));
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
-      {open && <button aria-label="Fechar menu" className="fixed inset-0 z-30 bg-slate-950/35 lg:hidden" onClick={() => setOpen(false)} />}
-      <aside className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col bg-[var(--purple-dark)] p-5 text-white transition-transform lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="mb-9 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3" onClick={() => setOpen(false)}>
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--yellow)] text-2xl">🍨</div>
-            <div><p className="font-black leading-tight">Sorveteria</p><p className="font-black leading-tight text-[var(--yellow)]">da Manu</p></div>
-          </Link>
-          <button className="lg:hidden" aria-label="Fechar menu" onClick={() => setOpen(false)}><X /></button>
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-56 flex-col border-r border-white/5 bg-[var(--purple-dark)] px-3 py-5 text-white lg:flex">
+        <div className="mb-8 px-2">
+          <Link href="/"><BrandLogo light /></Link>
         </div>
-        <nav className="grid gap-2">
+        <nav className="grid gap-1">
           {links.map(({ href, label, icon: Icon }) => (
-            <Link key={href} href={href} onClick={() => setOpen(false)} className={`flex min-h-12 items-center gap-3 rounded-xl px-4 font-semibold transition ${isActive(href) ? "bg-white text-[var(--purple)]" : "text-purple-100 hover:bg-white/10"}`}>
-              <Icon size={20} />{label}
+            <Link key={href} href={href} className={`relative flex min-h-11 items-center gap-3 rounded-[10px] px-3 text-sm font-medium transition ${isActive(href) ? "bg-white/10 font-semibold text-white" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}>
+              {isActive(href) && <span className="absolute -left-3 h-6 w-1 rounded-r-full bg-[var(--yellow)]" />}
+              <Icon size={19} strokeWidth={isActive(href) ? 2.5 : 2} />{label}
             </Link>
           ))}
         </nav>
-        <div className="mt-auto rounded-2xl bg-white/10 p-4 text-sm">
-          <p className="font-bold">Atendimento</p>
-          <p className="mt-1 text-purple-200">Dados salvos neste dispositivo</p>
-        </div>
-        <button onClick={() => router.push("/login")} className="mt-3 flex items-center gap-3 rounded-xl px-4 py-3 text-purple-100 hover:bg-white/10"><LogOut size={18} /> Sair</button>
+        <button onClick={() => router.push("/login")} className="mt-auto flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-purple-300 hover:bg-white/5 hover:text-white"><LogOut size={18} /> Sair</button>
       </aside>
-      <main className="lg:pl-72">
-        <header className="sticky top-0 z-20 flex h-18 items-center justify-between border-b border-slate-100 bg-white/90 px-4 backdrop-blur md:px-8">
-          <div className="flex items-center gap-3">
-            <button className="rounded-xl p-2 hover:bg-slate-100 lg:hidden" aria-label="Abrir menu" onClick={() => setOpen(true)}><Menu /></button>
-            <div><h1 className="text-xl font-black text-slate-900">{title}</h1><p className="hidden text-xs text-slate-500 sm:block">Sorveteria da Manu</p></div>
+      <main className="lg:pl-56">
+        <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[#faf8f4]/92 px-5 backdrop-blur-md md:px-7 lg:px-9">
+          <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-[var(--purple)] via-[#762557] to-[var(--yellow)] opacity-90" />
+          <div className="mx-auto flex h-[76px] max-w-[1440px] items-center justify-between">
+            <div><h1 className="text-[19px] font-bold tracking-[-0.02em] text-[var(--text)] md:text-[22px]">{title}</h1><p className="mt-0.5 text-xs font-normal text-[var(--muted)] md:text-[13px]">{today}</p></div>
+            <Link href="/pedidos/novo" className="hidden sm:block"><span className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-[var(--yellow)] px-4 text-sm font-semibold text-[var(--purple-dark)] transition hover:bg-[#e8ad00]"><Plus size={18} /> Novo pedido</span></Link>
+            <Link href="/" className="sm:hidden"><BrandLogo compact /></Link>
           </div>
-          <div className="grid h-10 w-10 place-items-center rounded-full bg-pink-100 font-black text-pink-700">M</div>
         </header>
-        <div className="mx-auto max-w-7xl p-4 pb-28 md:p-8">{children}</div>
+        <div className="mx-auto max-w-[1440px] px-5 py-5 pb-28 md:p-7 lg:p-9">{children}</div>
       </main>
-      <Link href="/pedidos/novo" aria-label="Criar novo pedido" className="fixed bottom-5 right-5 z-20 grid h-16 w-16 place-items-center rounded-full bg-[var(--yellow)] text-[var(--purple-dark)] shadow-xl hover:scale-105 lg:hidden"><PlusCircle size={30} /></Link>
+      <nav className="fixed inset-x-2.5 bottom-2.5 z-40 grid h-[68px] grid-cols-4 rounded-[18px] border border-[var(--border)] bg-white/95 px-1.5 pb-[env(safe-area-inset-bottom)] shadow-[0_8px_30px_rgba(33,6,47,.11)] backdrop-blur-md lg:hidden">
+        <Link href="/" className={`m-1 flex flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition ${pathname === "/" ? "bg-[#f5eff6] text-[var(--purple)]" : "text-slate-500"}`}><LayoutGrid size={21} strokeWidth={pathname === "/" ? 2.3 : 1.8} />Início</Link>
+        <Link href="/pedidos/novo" className="m-1 flex flex-col items-center justify-center gap-1 rounded-xl bg-[var(--yellow)] text-[10px] font-semibold text-[var(--purple-dark)] transition active:scale-[.97]"><PlusCircle size={21} strokeWidth={2.2} /><span>Novo pedido</span></Link>
+        <Link href="/pedidos" className={`m-1 flex flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition ${pathname.startsWith("/pedidos") && !pathname.includes("/novo") ? "bg-[#f5eff6] text-[var(--purple)]" : "text-slate-500"}`}><ClipboardList size={21} strokeWidth={pathname.startsWith("/pedidos") ? 2.3 : 1.8} />Pedidos</Link>
+        <Link href="/produtos" className={`m-1 flex flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition ${pathname.startsWith("/produtos") ? "bg-[#f5eff6] text-[var(--purple)]" : "text-slate-500"}`}><IceCreamBowl size={21} strokeWidth={pathname.startsWith("/produtos") ? 2.3 : 1.8} />Produtos</Link>
+      </nav>
     </div>
   );
 }

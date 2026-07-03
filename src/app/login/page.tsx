@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Field, Input } from "@/components/ui";
+import { BrandLogo } from "@/components/brand-logo";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -24,8 +25,8 @@ export default function LoginPage() {
   }
 
   return <main className="grid min-h-screen place-items-center bg-[var(--purple-dark)] p-4">
-    <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
-      <div className="mb-7 text-center"><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[var(--yellow)] text-3xl">🍨</div><h1 className="mt-4 text-2xl font-black text-[var(--purple-dark)]">Sorveteria da Manu</h1><p className="mt-1 text-sm text-slate-500">Entre para gerenciar os pedidos</p></div>
+    <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[var(--surface)] p-6 shadow-[0_20px_60px_rgba(0,0,0,.2)] sm:p-8">
+      <div className="mb-7 text-center"><div className="flex justify-center"><BrandLogo compact /></div><h1 className="mt-4 text-2xl font-bold text-[var(--purple-dark)]">Sorveteria da Manu</h1><p className="mt-1 text-sm font-normal text-[var(--muted)]">Acesso ao caixa</p></div>
       <form className="grid gap-4" onSubmit={submit}>
         <Field label="E-mail"><Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" /></Field>
         <Field label="Senha"><Input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Digite sua senha" /></Field>

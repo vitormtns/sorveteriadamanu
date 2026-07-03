@@ -2,6 +2,6 @@ import { OrderStatus } from "@/lib/types";
 import { statusLabel } from "@/lib/utils";
 
 export function StatusBadge({ status }: { status: OrderStatus }) {
-  const style = status === "paid" ? "bg-emerald-100 text-emerald-700" : status === "canceled" ? "bg-slate-100 text-slate-600" : "bg-amber-100 text-amber-800";
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${style}`}>{statusLabel[status]}</span>;
+  const style = status === "paid" ? "border-green-200 bg-green-50 text-[#15803d]" : status === "canceled" ? "border-slate-200 bg-slate-50 text-slate-600" : "border-[#f1dfb8] bg-[#fff8e8] text-[#b7791f]";
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold ${style}`}>{statusLabel[status]}</span>;
 }
