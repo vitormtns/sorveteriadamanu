@@ -1,0 +1,7 @@
+import Link from "next/link";
+import { ArrowRight, Check } from "lucide-react";
+import { AnimatedSection } from "./animated-section";
+
+export function DeliverySection() {
+  return <section id="delivery" className="bg-[#fff8ef] px-5 pb-20 md:px-8 md:pb-28"><AnimatedSection className="mx-auto max-w-[1240px]"><div className="relative overflow-hidden rounded-[2rem] bg-[#4a0b63] px-6 py-12 text-white md:px-12 md:py-16"><div className="absolute -right-28 -top-32 h-96 w-96 rounded-full bg-[#ff6fae]/25 blur-3xl" /><div className="absolute bottom-0 right-8 hidden text-[13rem] font-black leading-none text-white/[.035] lg:block">MANU</div><div className="relative max-w-2xl"><p className="landing-kicker text-[#f8b900]">Delivery da Manu</p><h2 className="landing-title mt-3 text-white">Peça online sem esperar resposta no WhatsApp.</h2><p className="mt-5 max-w-xl leading-relaxed text-white/65">Escolha os produtos, confira o pedido e envie direto para o balcão da Manu.</p><div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-white/70"><span className="flex items-center gap-2"><Check size={16} className="text-[#f8b900]" /> Pedido organizado</span><span className="flex items-center gap-2"><Check size={16} className="text-[#f8b900]" /> Retirada ou entrega</span></div><Link href="/delivery" className="mt-8 inline-flex min-h-13 items-center gap-2 rounded-full bg-[#f8b900] px-6 text-sm font-bold text-[#24002f] transition hover:-translate-y-1">Abrir delivery <ArrowRight size={17} /></Link></div></div></AnimatedSection></section>;
+}

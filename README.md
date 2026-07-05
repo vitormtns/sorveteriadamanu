@@ -21,7 +21,16 @@ npm install
 npm run dev
 ```
 
-Acesse [http://localhost:3000](http://localhost:3000). No modo de demonstração, a tela de login aceita qualquer e-mail e senha. Também é possível acessar diretamente a página inicial.
+Acesse [http://localhost:3000](http://localhost:3000) para abrir a landing page pública.
+
+Rotas principais:
+
+- `/` — site público da Sorveteria da Manu
+- `/delivery` — espaço reservado para o cardápio online
+- `/sistema` — painel interno da equipe
+- `/login` — autenticação da equipe
+
+No modo de demonstração, a tela de login aceita qualquer e-mail e senha.
 
 ## Configuração do Supabase
 

@@ -21,7 +21,7 @@ export default function LoginPage() {
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) { setError("E-mail ou senha inválidos."); setLoading(false); return; }
     }
-    router.push("/");
+    router.push("/sistema");
   }
 
   return <main className="grid min-h-screen place-items-center bg-[var(--purple-dark)] p-4">
