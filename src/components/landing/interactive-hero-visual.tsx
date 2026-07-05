@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { getImageProps } from "next/image";
 import { useEffect, useRef } from "react";
 
 export function InteractiveHeroVisual() {
@@ -8,6 +8,20 @@ export function InteractiveHeroVisual() {
   const frameRef = useRef<number | null>(null);
   const current = useRef({ x: 0, y: 0 });
   const target = useRef({ x: 0, y: 0 });
+  const desktopImage = getImageProps({
+    src: "/landing/hero-acai.png",
+    alt: "",
+    fill: true,
+    priority: true,
+    sizes: "100vw",
+  }).props;
+  const mobileImage = getImageProps({
+    src: "/landing/hero-acai-mobile.png",
+    alt: "",
+    fill: true,
+    priority: true,
+    sizes: "100vw",
+  }).props;
 
   useEffect(() => {
     const root = rootRef.current;
@@ -56,7 +70,10 @@ export function InteractiveHeroVisual() {
         <span className="interactive-hero__glow interactive-hero__glow--gold" />
       </div>
       <div className="interactive-hero__product">
-        <Image src="/landing/hero-acai.png" alt="" fill priority sizes="100vw" className="object-cover object-[68%_center]" />
+        <picture>
+          <source media="(max-width: 767px)" srcSet={mobileImage.srcSet} />
+          <img {...desktopImage} alt="" className="object-cover object-[68%_center]" />
+        </picture>
       </div>
       <div className="interactive-hero__glass" />
     </div>

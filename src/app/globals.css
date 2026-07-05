@@ -99,6 +99,10 @@ button { cursor: pointer; }
   background: #24002f;
 }
 
+.hero-content {
+  z-index: 10;
+}
+
 .interactive-hero__atmosphere,
 .interactive-hero__product,
 .interactive-hero__glass {
@@ -155,8 +159,8 @@ button { cursor: pointer; }
 }
 
 @keyframes hero-product-float {
-  0%, 100% { transform: translate3d(-3px, -2px, 20px) rotateX(.35deg) rotateY(-.65deg) scale(1.045); }
-  50% { transform: translate3d(4px, 4px, 28px) rotateX(-.45deg) rotateY(.8deg) scale(1.055); }
+  0%, 100% { transform: translate3d(-2px, -3px, 20px) rotateX(.15deg) rotateY(-.35deg) scale(1.025); }
+  50% { transform: translate3d(3px, 2px, 24px) rotateX(-.2deg) rotateY(.4deg) scale(1.035); }
 }
 
 @keyframes hero-glass-drift {
@@ -166,7 +170,27 @@ button { cursor: pointer; }
 
 @media (max-width: 767px) {
   .landing-page {
-    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+    padding-bottom: 0;
+  }
+
+  .landing-page footer {
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+  }
+
+  .landing-header-inner {
+    height: 3.75rem;
+    padding-right: 1rem;
+    padding-left: 1rem;
+  }
+
+  .landing-header-logo {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: .65rem;
+  }
+
+  .landing-page #inicio {
+    min-height: clamp(42rem, 88svh, 50rem);
   }
 
   .landing-mobile-section {
@@ -181,7 +205,7 @@ button { cursor: pointer; }
     bottom: .75rem;
     left: .75rem;
     display: grid;
-    grid-template-columns: .82fr 1.18fr;
+    grid-template-columns: .8fr 1.25fr .9fr;
     gap: .5rem;
     min-height: 4rem;
     padding: .45rem;
@@ -200,8 +224,9 @@ button { cursor: pointer; }
     justify-content: center;
     gap: .5rem;
     border-radius: .8rem;
-    font-size: .78rem;
+    font-size: .72rem;
     font-weight: 700;
+    white-space: nowrap;
     transition: transform .15s ease, background-color .15s ease;
   }
 
@@ -287,8 +312,9 @@ button { cursor: pointer; }
 
   .hero-content {
     align-items: flex-start;
-    padding-top: 7.5rem;
-    padding-bottom: 2.5rem;
+    min-height: clamp(42rem, 88svh, 50rem);
+    padding-top: 6.4rem;
+    padding-bottom: 5.5rem;
   }
 
   .hero-copy {
@@ -324,7 +350,8 @@ button { cursor: pointer; }
 
   .hero-overlay {
     background:
-      linear-gradient(180deg, rgba(36,0,47,.98) 0%, rgba(36,0,47,.86) 43%, rgba(36,0,47,.34) 68%, rgba(36,0,47,.9) 100%),
+      linear-gradient(270deg, rgba(36,0,47,.25) 0%, transparent 38%),
+      linear-gradient(180deg, rgba(36,0,47,.98) 0%, rgba(36,0,47,.88) 42%, rgba(36,0,47,.38) 67%, rgba(36,0,47,.92) 100%),
       linear-gradient(90deg, rgba(36,0,47,.94) 0%, rgba(36,0,47,.54) 68%, rgba(36,0,47,.18) 100%);
   }
 
@@ -336,7 +363,7 @@ button { cursor: pointer; }
     animation: hero-product-float 9s ease-in-out infinite;
   }
   .interactive-hero__product img {
-    object-position: 68% 52% !important;
+    object-position: center bottom !important;
   }
   .interactive-hero__glass {
     animation: hero-glass-drift 11s ease-in-out infinite;
@@ -357,6 +384,19 @@ button { cursor: pointer; }
   .hero-actions a {
     min-height: 3rem;
     font-size: .78rem;
+  }
+
+  .mobile-landing-nav {
+    right: .5rem;
+    bottom: .5rem;
+    left: .5rem;
+    gap: .3rem;
+    padding: .35rem;
+  }
+
+  .mobile-landing-nav a {
+    gap: .35rem;
+    font-size: .67rem;
   }
 }
 
@@ -384,7 +424,6 @@ button { cursor: pointer; }
   .interactive-hero__product,
   .interactive-hero__glass {
     animation: none !important;
-    transform: none !important;
     will-change: auto;
   }
 }
