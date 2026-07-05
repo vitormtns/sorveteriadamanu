@@ -1,6 +1,6 @@
 create extension if not exists "pgcrypto";
 
-create type product_category as enum ('Açaí', 'Sorvete', 'Complementos', 'Promoções', 'Outros');
+create type product_category as enum ('Açaí', 'Sorvetes', 'Sobremesas', 'Promoções', 'Bebidas', 'Outros');
 create type payment_method as enum ('Pix', 'Dinheiro', 'Cartão', 'Fiado/Outro');
 create type order_status as enum ('pending_payment', 'paid', 'canceled');
 

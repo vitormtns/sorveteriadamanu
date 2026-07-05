@@ -9,14 +9,14 @@ export function InteractiveHeroVisual() {
   const current = useRef({ x: 0, y: 0 });
   const target = useRef({ x: 0, y: 0 });
   const desktopImage = getImageProps({
-    src: "/landing/hero-acai.png",
+    src: "/landing/hero-acai-sem-churros.png",
     alt: "",
     fill: true,
     priority: true,
     sizes: "100vw",
   }).props;
   const mobileImage = getImageProps({
-    src: "/landing/hero-acai-mobile.png",
+    src: "/landing/hero-acai-mobile-sem-churros.png",
     alt: "",
     fill: true,
     priority: true,

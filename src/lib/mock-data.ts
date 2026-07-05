@@ -9,9 +9,9 @@ const at = (hours: number, minutes: number) => {
 export const initialProducts: Product[] = [
   { id: "p1", name: "Açaí 300 ml", category: "Açaí", price: 14, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
   { id: "p2", name: "Açaí 500 ml", category: "Açaí", price: 19, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
-  { id: "p3", name: "Copo de sorvete 2 bolas", category: "Sorvete", price: 12, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
-  { id: "p4", name: "Casquinha", category: "Sorvete", price: 8, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
-  { id: "p5", name: "Leite em pó", category: "Complementos", price: 3, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p3", name: "Copo de sorvete 2 bolas", category: "Sorvetes", price: 12, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p4", name: "Casquinha", category: "Sorvetes", price: 8, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p5", name: "Taça especial", category: "Sobremesas", price: 16, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
   { id: "p6", name: "Combo Manu", category: "Promoções", price: 25, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
 ];
 
