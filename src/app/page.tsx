@@ -7,7 +7,8 @@ import { DeliverySection } from "@/components/landing/delivery-section";
 import { PromoSection } from "@/components/landing/promo-section";
 import { ContactSection } from "@/components/landing/contact-section";
 import { LandingFooter } from "@/components/landing/landing-footer";
+import { MobileLandingNav } from "@/components/landing/mobile-landing-nav";
 
 export default function LandingPage() {
-  return <main className="landing-page"><LandingHeader /><HeroSection /><ProductHighlights /><ExperienceSection /><ProductsSection /><DeliverySection /><PromoSection /><ContactSection /><LandingFooter /></main>;
+  return <main className="landing-page"><LandingHeader /><HeroSection /><ProductHighlights /><ExperienceSection /><ProductsSection /><DeliverySection /><PromoSection /><ContactSection /><LandingFooter /><MobileLandingNav /></main>;
 }
