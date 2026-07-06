@@ -2,7 +2,7 @@
 
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { initialOrders, initialProducts } from "@/lib/mock-data";
-import { NewOrder, Order, Product } from "@/lib/types";
+import { LegacyOrderStatus, NewOrder, Order, Product } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
 interface StoreContextValue {
@@ -17,6 +17,21 @@ interface StoreContextValue {
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
+function normalizeOrder(order: Partial<Order> & Pick<Order, "id" | "customerName" | "items" | "paymentMethod" | "total" | "createdAt" | "updatedAt">): Order {
+  const legacyStatus = order.status as LegacyOrderStatus | undefined;
+  const paymentStatus = order.paymentStatus ?? (legacyStatus === "paid" ? "paid" : "pending");
+  const orderStatus = order.orderStatus ?? (legacyStatus === "canceled" ? "canceled" : legacyStatus === "paid" ? "delivered" : "new");
+
+  return {
+    ...order,
+    paymentStatus,
+    orderStatus,
+    status: orderStatus === "canceled" ? "canceled" : paymentStatus === "paid" ? "paid" : "pending_payment",
+    origin: order.origin ?? "internal",
+    deliveryType: order.deliveryType ?? "pickup",
+  };
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [orders, setOrders] = useState<Order[]>(initialOrders);
@@ -26,8 +41,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const savedProducts = localStorage.getItem("manu-products");
     const savedOrders = localStorage.getItem("manu-orders");
     /* eslint-disable react-hooks/set-state-in-effect */
-    if (savedProducts) setProducts(JSON.parse(savedProducts));
-    if (savedOrders) setOrders(JSON.parse(savedOrders));
+    try {
+      if (savedProducts) setProducts(JSON.parse(savedProducts));
+      if (savedOrders) setOrders((JSON.parse(savedOrders) as Order[]).map(normalizeOrder));
+    } catch {
+      // Mantém os dados iniciais se o armazenamento local estiver corrompido.
+    }
     setReady(true);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
@@ -49,12 +68,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const addOrder = (input: NewOrder) => {
     const id = uid();
     const now = new Date().toISOString();
-    setOrders((current) => [{ ...input, id, createdAt: now, updatedAt: now }, ...current]);
+    setOrders((current) => [normalizeOrder({ ...input, id, createdAt: now, updatedAt: now }), ...current]);
     return id;
   };
 
   const updateOrder = (id: string, patch: Partial<Order>) =>
-    setOrders((current) => current.map((order) => order.id === id ? { ...order, ...patch, updatedAt: new Date().toISOString() } : order));
+    setOrders((current) => current.map((order) => {
+      if (order.id !== id) return order;
+      const translatedPatch = { ...patch };
+      if (patch.status && !patch.paymentStatus && !patch.orderStatus) {
+        translatedPatch.paymentStatus = patch.status === "paid" ? "paid" : "pending";
+        if (patch.status === "canceled") translatedPatch.orderStatus = "canceled";
+      }
+      return normalizeOrder({ ...order, ...translatedPatch, updatedAt: new Date().toISOString() });
+    }));
 
   return <StoreContext.Provider value={{ products, orders, ready, saveProduct, deleteProduct, addOrder, updateOrder }}>{children}</StoreContext.Provider>;
 }

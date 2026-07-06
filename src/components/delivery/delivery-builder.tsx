@@ -68,7 +68,7 @@ export function DeliveryBuilder() {
   const submit = () => {
     const validation = !customer.name.trim() ? "Informe seu nome." : !customer.phone.trim() ? "Informe seu telefone." : customer.deliveryType === "delivery" && !customer.address.trim() ? "Informe o endereço para entrega." : !customer.payment ? "Escolha uma forma de pagamento." : !cart.length ? "Adicione pelo menos um item ao pedido." : "";
     if (validation) return setError(validation);
-    const id = addOrder({ customerName: customer.name.trim(), phone: customer.phone.trim(), items: cart.map(item => ({ id: item.id, productId: item.productId, productName: `${item.name} — ${item.detail}`, quantity: item.quantity, unitPrice: item.price })), notes: customer.notes.trim() || undefined, paymentMethod: customer.payment as PaymentMethod, status: "pending_payment", total, origin: "delivery", deliveryType: customer.deliveryType, address: customer.deliveryType === "delivery" ? customer.address.trim() : undefined });
+    const id = addOrder({ customerName: customer.name.trim(), phone: customer.phone.trim(), items: cart.map(item => ({ id: item.id, productId: item.productId, productName: `${item.name} — ${item.detail}`, quantity: item.quantity, unitPrice: item.price })), notes: customer.notes.trim() || undefined, paymentMethod: customer.payment as PaymentMethod, paymentStatus: "pending", orderStatus: "new", status: "pending_payment", total, origin: "delivery", deliveryType: customer.deliveryType, address: customer.deliveryType === "delivery" ? customer.address.trim() : undefined });
     setOrderId(id);
   };
   if (orderId) return <Success id={orderId} restart={() => { setOrderId(""); setCart([]); setCustomer(emptyCustomer); reset(); }} />;

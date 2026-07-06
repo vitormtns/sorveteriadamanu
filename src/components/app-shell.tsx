@@ -16,7 +16,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   if (pathname === "/" || pathname === "/delivery" || pathname === "/login") return children;
 
-  const title = pathname === "/sistema" ? "Pedidos" : pathname.includes("/novo") ? "Novo pedido" : pathname.startsWith("/produtos") ? "Produtos" : "Pedidos";
+  const title = pathname === "/sistema" ? "Visão geral" : pathname.includes("/novo") ? "Novo pedido" : pathname.startsWith("/produtos") ? "Produtos" : "Pedidos";
   const now = new Date();
   const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(now);
   const month = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(now);

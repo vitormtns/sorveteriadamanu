@@ -5,7 +5,7 @@ import { Check, Minus, Plus, Search, ShoppingCart } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/components/store-provider";
 import { Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
-import { PaymentMethod, Product } from "@/lib/types";
+import { PaymentMethod, PaymentStatus, Product } from "@/lib/types";
 import { formatCurrency, uid } from "@/lib/utils";
 
 export default function NewOrderPage() {
@@ -14,7 +14,7 @@ export default function NewOrderPage() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Pix");
-  const [status, setStatus] = useState<"paid" | "pending_payment">("paid");
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("paid");
   const active = products.filter((p) => p.active && p.name.toLowerCase().includes(search.toLowerCase()));
   const selected = products.filter((p) => (quantities[p.id] || 0) > 0);
   const total = useMemo(() => selected.reduce((sum, p) => sum + p.price * quantities[p.id], 0), [selected, quantities]);
@@ -31,7 +31,9 @@ export default function NewOrderPage() {
       customerName: String(data.get("customerName")),
       phone: String(data.get("phone") || ""),
       notes: String(data.get("notes") || ""),
-      paymentMethod, status, total,
+      paymentMethod, paymentStatus, orderStatus: "new",
+      status: paymentStatus === "paid" ? "paid" : "pending_payment",
+      origin: "internal", deliveryType: "pickup", total,
       items: selected.map((product) => ({ id: uid(), productId: product.id, productName: product.name, quantity: quantities[product.id], unitPrice: product.price })),
     });
     router.push(`/pedidos/${id}?criado=1`);
@@ -59,7 +61,7 @@ export default function NewOrderPage() {
         <div className="mb-5 flex items-center justify-between"><span className="font-semibold">Total</span><span className="text-2xl font-bold tracking-[-0.02em] text-[var(--text)]">{formatCurrency(total)}</span></div>
         <div className="grid gap-4">
           <Field label="Forma de pagamento"><Select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option>Fiado/Outro</option></Select></Field>
-          <div><p className="mb-2 text-sm font-bold text-slate-700">Status do pagamento</p><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setStatus("paid")} className={`min-h-12 rounded-xl border font-bold ${status === "paid" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200"}`}>Pago</button><button type="button" onClick={() => setStatus("pending_payment")} className={`min-h-12 rounded-xl border font-bold ${status === "pending_payment" ? "border-amber-500 bg-amber-50 text-amber-700" : "border-slate-200"}`}>Pendente</button></div></div>
+          <div><p className="mb-2 text-sm font-bold text-slate-700">Status do pagamento</p><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setPaymentStatus("paid")} className={`min-h-12 rounded-xl border font-bold ${paymentStatus === "paid" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200"}`}>Pago</button><button type="button" onClick={() => setPaymentStatus("pending")} className={`min-h-12 rounded-xl border font-bold ${paymentStatus === "pending" ? "border-amber-500 bg-amber-50 text-amber-700" : "border-slate-200"}`}>Pendente</button></div></div>
           <Button type="submit" disabled={!selected.length} className="min-h-14 w-full text-base"><Check size={20} /> Salvar pedido</Button>
         </div>
       </Card>
