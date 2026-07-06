@@ -112,10 +112,10 @@ export default function NewOrderPage() {
   const icePrice = (iceScoops.find((item) => item.name === iceScoop)?.price || 0)
     + (iceFormats.find((item) => item.name === iceFormat)?.price || 0);
   const shakePrice = shakeSizes.find((item) => item.name === shakeSize)?.price || 0;
-  const promotions = products.filter((product) => product.active && product.category === "Promoções");
+  const promotions = products.filter((product) => product.active && product.availableToday && product.category === "Promoções");
   const availableProducts = products.filter((product) =>
-    product.active && `${product.name} ${product.category}`.toLowerCase().includes(search.trim().toLowerCase()),
-  );
+    product.active && product.availableToday && `${product.name} ${product.category}`.toLowerCase().includes(search.trim().toLowerCase()),
+  ).sort((a, b) => a.displayOrder - b.displayOrder);
 
   function resetBuilder() {
     setAcaiSize("");

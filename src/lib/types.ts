@@ -12,8 +12,73 @@ export interface Product {
   category: ProductCategory;
   price: number;
   active: boolean;
+  availableToday: boolean;
+  featured: boolean;
+  displayOrder: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export type WeekdayKey = "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
+
+export interface BusinessHour {
+  enabled: boolean;
+  open: string;
+  close: string;
+}
+
+export interface Promotion {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  active: boolean;
+  featuredOnHome: boolean;
+  validUntil?: string;
+  imageUrl?: string;
+}
+
+export interface ConfigurableItem {
+  id: string;
+  name: string;
+  available: boolean;
+  extraPrice?: number;
+  previewColor?: string;
+}
+
+export interface StoreSettings {
+  version: 1;
+  status: {
+    deliveryOpen: boolean;
+    pauseOnlineOrders: boolean;
+    closedMessage: string;
+    allowPickup: boolean;
+    allowDelivery: boolean;
+    closedToday: boolean;
+    temporaryPause: boolean;
+  };
+  businessHours: Record<WeekdayKey, BusinessHour>;
+  delivery: {
+    fee: number;
+    note: string;
+  };
+  payments: {
+    accepted: Record<PaymentMethod, boolean>;
+    pixKey: string;
+    note: string;
+  };
+  promotions: Promotion[];
+  acaiExtras: ConfigurableItem[];
+  iceCreamFlavors: ConfigurableItem[];
+  milkshakeFlavors: ConfigurableItem[];
+  site: {
+    headline: string;
+    subtitle: string;
+    whatsapp: string;
+    address: string;
+    instagram: string;
+    displayedHours: string;
+  };
 }
 
 export interface OrderItem {

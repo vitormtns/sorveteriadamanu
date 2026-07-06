@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardList, IceCreamBowl, LayoutGrid, LogOut, Plus, PlusCircle } from "lucide-react";
+import { ClipboardList, IceCreamBowl, LayoutGrid, LogOut, Plus, PlusCircle, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "./brand-logo";
@@ -9,6 +9,7 @@ const links = [
   { href: "/sistema", label: "Início", icon: LayoutGrid },
   { href: "/pedidos", label: "Pedidos", icon: ClipboardList },
   { href: "/produtos", label: "Produtos", icon: IceCreamBowl },
+  { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -16,7 +17,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   if (pathname === "/" || pathname === "/delivery" || pathname === "/login" || pathname.startsWith("/acompanhar/") || pathname.endsWith("/imprimir")) return children;
 
-  const title = pathname === "/sistema" ? "Visão geral" : pathname.includes("/novo") ? "Novo pedido" : pathname.startsWith("/produtos") ? "Produtos" : "Pedidos";
+  const title = pathname === "/sistema" ? "Visão geral" : pathname.includes("/novo") ? "Novo pedido" : pathname.startsWith("/produtos") ? "Produtos" : pathname.startsWith("/configuracoes") ? "Configurações da loja" : "Pedidos";
   const now = new Date();
   const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(now);
   const month = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(now);
@@ -50,11 +51,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
         <div className="internal-content mx-auto min-w-0 max-w-[1440px] px-4 py-5 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:px-5 md:p-7 lg:p-9">{children}</div>
       </main>
-      <nav className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 grid h-[68px] grid-cols-4 rounded-[20px] border border-white/10 bg-[#21062f]/95 px-1.5 shadow-[0_12px_38px_rgba(33,6,47,.24)] backdrop-blur-xl lg:hidden">
+      <nav className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 grid h-[68px] grid-cols-5 rounded-[20px] border border-white/10 bg-[#21062f]/95 px-1.5 shadow-[0_12px_38px_rgba(33,6,47,.24)] backdrop-blur-xl lg:hidden">
         <Link href="/sistema" className={`m-1 flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition ${pathname === "/sistema" ? "bg-white/10 text-white" : "text-purple-200/65"}`}><LayoutGrid size={20} strokeWidth={pathname === "/sistema" ? 2.3 : 1.8} />Início</Link>
         <Link href="/pedidos/novo" className="m-1 flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl bg-[var(--yellow)] text-[10px] font-semibold text-[var(--purple-dark)] transition active:scale-[.97]"><PlusCircle size={20} strokeWidth={2.2} /><span className="truncate">Novo pedido</span></Link>
         <Link href="/pedidos" className={`m-1 flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition ${pathname.startsWith("/pedidos") && !pathname.includes("/novo") ? "bg-white/10 text-white" : "text-purple-200/65"}`}><ClipboardList size={20} strokeWidth={pathname.startsWith("/pedidos") ? 2.3 : 1.8} />Pedidos</Link>
         <Link href="/produtos" className={`m-1 flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition ${pathname.startsWith("/produtos") ? "bg-white/10 text-white" : "text-purple-200/65"}`}><IceCreamBowl size={20} strokeWidth={pathname.startsWith("/produtos") ? 2.3 : 1.8} />Produtos</Link>
+        <Link href="/configuracoes" className={`m-1 flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-medium transition ${pathname.startsWith("/configuracoes") ? "bg-white/10 text-white" : "text-purple-200/65"}`}><Settings size={20} strokeWidth={pathname.startsWith("/configuracoes") ? 2.3 : 1.8} /><span className="truncate">Ajustes</span></Link>
       </nav>
     </div>
   );

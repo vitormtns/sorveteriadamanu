@@ -8,16 +8,16 @@ const at = (hours: number, minutes: number, daysAgo = 0) => {
 };
 
 export const initialProducts: Product[] = [
-  { id: "p1", name: "Açaí 300 ml", category: "Açaí", price: 14, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
-  { id: "p2", name: "Açaí 500 ml", category: "Açaí", price: 19, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
-  { id: "p3", name: "Copo de sorvete 2 bolas", category: "Sorvetes", price: 12, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
-  { id: "p4", name: "Casquinha", category: "Sorvetes", price: 8, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
-  { id: "p5", name: "Taça especial", category: "Sobremesas", price: 16, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
-  { id: "p6", name: "Combo Manu", category: "Promoções", price: 25, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
-  { id: "p7", name: "Milk-shake 300 ml", category: "Milk-shakes", price: 12, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
-  { id: "p8", name: "Milk-shake 500 ml", category: "Milk-shakes", price: 17, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
-  { id: "p9", name: "Milk-shake de Ovomaltine", category: "Milk-shakes", price: 19, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
-  { id: "p10", name: "Milk-shake de morango", category: "Milk-shakes", price: 17, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p1", name: "Açaí 300 ml", category: "Açaí", price: 14, active: true, availableToday: true, featured: true, displayOrder: 1, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p2", name: "Açaí 500 ml", category: "Açaí", price: 19, active: true, availableToday: true, featured: false, displayOrder: 2, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p3", name: "Copo de sorvete 2 bolas", category: "Sorvetes", price: 12, active: true, availableToday: true, featured: true, displayOrder: 3, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p4", name: "Casquinha", category: "Sorvetes", price: 8, active: true, availableToday: true, featured: false, displayOrder: 4, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p5", name: "Taça especial", category: "Sobremesas", price: 16, active: true, availableToday: true, featured: false, displayOrder: 5, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p6", name: "Combo Manu", category: "Promoções", price: 25, active: true, availableToday: true, featured: true, displayOrder: 6, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p7", name: "Milk-shake 300 ml", category: "Milk-shakes", price: 12, active: true, availableToday: true, featured: false, displayOrder: 7, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p8", name: "Milk-shake 500 ml", category: "Milk-shakes", price: 17, active: true, availableToday: true, featured: false, displayOrder: 8, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p9", name: "Milk-shake de Ovomaltine", category: "Milk-shakes", price: 19, active: true, availableToday: true, featured: false, displayOrder: 9, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p10", name: "Milk-shake de morango", category: "Milk-shakes", price: 17, active: true, availableToday: true, featured: false, displayOrder: 10, createdAt: at(8, 0), updatedAt: at(8, 0) },
 ];
 
 export const initialOrders: Order[] = [
