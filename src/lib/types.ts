@@ -41,6 +41,7 @@ export interface Order {
   origin: OrderOrigin;
   deliveryType: DeliveryType;
   address?: string;
+  publicCode?: string;
 }
 
 export type NewOrder = Omit<Order, "id" | "createdAt" | "updatedAt">;

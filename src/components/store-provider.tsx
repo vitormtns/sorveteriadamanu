@@ -4,6 +4,7 @@ import { createContext, ReactNode, useContext, useEffect, useState } from "react
 import { initialOrders, initialProducts } from "@/lib/mock-data";
 import { LegacyOrderStatus, NewOrder, Order, Product } from "@/lib/types";
 import { uid } from "@/lib/utils";
+import { createPublicOrderCode } from "@/lib/order-code";
 
 interface StoreContextValue {
   products: Product[];
@@ -13,6 +14,7 @@ interface StoreContextValue {
   deleteProduct: (id: string) => void;
   addOrder: (order: NewOrder) => string;
   updateOrder: (id: string, patch: Partial<Order>) => void;
+  refreshOrders: () => void;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -65,10 +67,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const deleteProduct = (id: string) => setProducts((current) => current.filter((item) => item.id !== id));
 
+  const refreshOrders = () => {
+    try {
+      const savedOrders = localStorage.getItem("manu-orders");
+      if (savedOrders) setOrders((JSON.parse(savedOrders) as Order[]).map(normalizeOrder));
+    } catch {
+      // Mantém o estado atual se o armazenamento local estiver corrompido.
+    }
+  };
+
   const addOrder = (input: NewOrder) => {
     const id = uid();
     const now = new Date().toISOString();
-    setOrders((current) => [normalizeOrder({ ...input, id, createdAt: now, updatedAt: now }), ...current]);
+    setOrders((current) => [normalizeOrder({ ...input, publicCode: input.publicCode ?? createPublicOrderCode(id), id, createdAt: now, updatedAt: now }), ...current]);
     return id;
   };
 
@@ -83,7 +94,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return normalizeOrder({ ...order, ...translatedPatch, updatedAt: new Date().toISOString() });
     }));
 
-  return <StoreContext.Provider value={{ products, orders, ready, saveProduct, deleteProduct, addOrder, updateOrder }}>{children}</StoreContext.Provider>;
+  return <StoreContext.Provider value={{ products, orders, ready, saveProduct, deleteProduct, addOrder, updateOrder, refreshOrders }}>{children}</StoreContext.Provider>;
 }
 
 export function useStore() {
