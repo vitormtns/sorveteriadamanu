@@ -28,7 +28,7 @@ export default function OrdersPage() {
     </div>
     <Card className="overflow-hidden p-0">
       {visible.length === 0 && <div className="p-12 text-center"><ClipboardList className="mx-auto text-slate-300" size={28} /><p className="mt-3 font-bold">Nenhum pedido encontrado</p><p className="text-sm text-slate-500">Altere os filtros ou a busca.</p></div>}
-      <div className="divide-y divide-slate-100">{visible.map((order) => <div key={order.id} className="grid gap-3 p-4 hover:bg-slate-50 md:grid-cols-[1fr_auto_auto] md:items-center">
+      <div className="divide-y divide-[var(--border)]">{visible.map((order) => <div key={order.id} className="grid gap-3 p-4 transition hover:bg-[#faf5f9] md:grid-cols-[1fr_auto_auto] md:items-center">
         <Link href={`/pedidos/${order.id}`} className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-[var(--text)]">{order.customerName}</p><StatusBadge status={order.status} /></div><p className="mt-1 text-sm font-normal text-[var(--muted)]">{formatDateTime(order.createdAt)} · {order.paymentMethod} · {order.items.length} {order.items.length === 1 ? "item" : "itens"}</p></Link>
         <p className="text-lg font-bold text-[var(--text)]">{formatCurrency(order.total)}</p>
         <div className="flex flex-wrap gap-2">

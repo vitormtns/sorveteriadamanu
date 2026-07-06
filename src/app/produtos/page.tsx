@@ -32,8 +32,8 @@ export default function ProductsPage() {
     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="text-xl font-bold text-[var(--text)]">Cardápio</h2><p className="text-sm font-normal text-[var(--muted)]">Produtos disponíveis no caixa.</p></div><Button onClick={() => setEditing(null)}><Plus size={18} /> Adicionar produto</Button></div>
     <div className="relative max-w-xl"><Search className="absolute left-4 top-3.5 text-slate-400" size={20} /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar produto..." className="pl-11" /></div>
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {visible.map((product) => <Card key={product.id} className="flex items-center gap-4">
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#eee6f2] text-[var(--purple)]"><Package size={22} /></div>
+      {visible.map((product) => <Card key={product.id} className="internal-metric group flex items-center gap-4">
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[linear-gradient(145deg,#f6edf7,#fff5dd)] text-[var(--purple)] transition group-hover:scale-105"><Package size={22} /></div>
         <div className="min-w-0 flex-1"><p className="truncate font-semibold text-[var(--text)]">{product.name}</p><p className="text-sm text-[var(--muted)]">{product.category}</p><p className="mt-1 font-bold text-[var(--text)]">{formatCurrency(product.price)}</p></div>
         <div className="grid justify-items-end gap-2"><span className={`rounded-full px-2 py-1 text-xs font-bold ${product.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{product.active ? "Ativo" : "Inativo"}</span><div><button aria-label={`Editar ${product.name}`} className="p-2 text-slate-500 hover:text-purple-700" onClick={() => setEditing(product)}><Edit3 size={17} /></button><button aria-label={`Excluir ${product.name}`} className="p-2 text-slate-500 hover:text-red-700" onClick={() => confirm("Deseja excluir este produto?") && deleteProduct(product.id)}><Trash2 size={17} /></button></div></div>
       </Card>)}

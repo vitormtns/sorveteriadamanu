@@ -43,7 +43,7 @@ export default function NewOrderPage() {
       <Card>
         <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h2 className="text-lg font-bold">Escolha os produtos</h2><p className="text-sm font-normal text-[var(--muted)]">Toque em + para adicionar</p></div><div className="relative"><Search className="absolute left-3 top-3 text-slate-400" size={18} /><Input className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..." /></div></div>
         <div className="grid gap-2 sm:grid-cols-2">
-          {active.map((product) => { const quantity = quantities[product.id] || 0; return <div key={product.id} className={`flex items-center gap-3 rounded-2xl border p-3 transition ${quantity ? "border-purple-300 bg-purple-50" : "border-slate-100"}`}>
+          {active.map((product) => { const quantity = quantities[product.id] || 0; return <div key={product.id} className={`flex items-center gap-3 rounded-xl border p-3 transition duration-200 ${quantity ? "border-[#b77bc0] bg-[linear-gradient(145deg,#faf3fb,#fffaf0)] shadow-[0_8px_24px_rgba(58,10,77,.06)]" : "border-[var(--border)] bg-white hover:border-[#d7bedb]"}`}>
             <button type="button" onClick={() => change(product, 1)} className="min-w-0 flex-1 text-left"><p className="truncate font-semibold text-[var(--text)]">{product.name}</p><p className="text-sm font-semibold text-[var(--purple)]">{formatCurrency(product.price)}</p></button>
             {quantity > 0 ? <div className="flex items-center gap-2"><button type="button" aria-label="Diminuir quantidade" className="grid h-9 w-9 place-items-center rounded-full border border-[var(--border)] bg-white" onClick={() => change(product, -1)}><Minus size={16} /></button><span className="w-5 text-center font-semibold">{quantity}</span><button type="button" aria-label="Aumentar quantidade" className="grid h-9 w-9 place-items-center rounded-full bg-[var(--purple)] text-white" onClick={() => change(product, 1)}><Plus size={16} /></button></div> : <button type="button" aria-label={`Adicionar ${product.name}`} className="grid h-10 w-10 place-items-center rounded-full bg-[#f2ebf4] text-[var(--purple)]" onClick={() => change(product, 1)}><Plus size={18} /></button>}
           </div>})}
@@ -52,7 +52,8 @@ export default function NewOrderPage() {
       <Card><Field label="Observações (opcional)"><Textarea name="notes" rows={3} placeholder="Ex.: sem banana, retirar às 16h..." /></Field></Card>
     </div>
     <aside className="grid content-start gap-5">
-      <Card className="xl:sticky xl:top-24">
+      <Card className="relative overflow-hidden xl:sticky xl:top-24">
+        <span className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[#ff6fae] via-[var(--yellow)] to-[#4a0b63]" />
         <h2 className="flex items-center gap-2 text-lg font-bold"><ShoppingCart size={20} /> Resumo do pedido</h2>
         <div className="my-4 grid gap-2 border-y border-slate-100 py-4">{selected.length === 0 && <p className="text-sm text-slate-500">Nenhum produto adicionado.</p>}{selected.map((p) => <div key={p.id} className="flex justify-between text-sm"><span>{quantities[p.id]}× {p.name}</span><b>{formatCurrency(p.price * quantities[p.id])}</b></div>)}</div>
         <div className="mb-5 flex items-center justify-between"><span className="font-semibold">Total</span><span className="text-2xl font-bold tracking-[-0.02em] text-[var(--text)]">{formatCurrency(total)}</span></div>
