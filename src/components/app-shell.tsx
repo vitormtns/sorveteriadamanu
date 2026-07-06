@@ -14,7 +14,7 @@ const links = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  if (pathname === "/" || pathname === "/delivery" || pathname === "/login" || pathname.startsWith("/acompanhar/")) return children;
+  if (pathname === "/" || pathname === "/delivery" || pathname === "/login" || pathname.startsWith("/acompanhar/") || pathname.endsWith("/imprimir")) return children;
 
   const title = pathname === "/sistema" ? "Visão geral" : pathname.includes("/novo") ? "Novo pedido" : pathname.startsWith("/produtos") ? "Produtos" : "Pedidos";
   const now = new Date();

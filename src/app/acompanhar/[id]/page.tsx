@@ -112,7 +112,7 @@ export default function TrackOrderPage() {
           </div>
           <div className="rounded-[22px] border border-[#eadfea] bg-white p-4">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{order.deliveryType === "delivery" ? "Entrega" : "Retirada"}</p>
-            <strong className="mt-1 block text-sm text-[#24002f]">{order.deliveryType === "delivery" ? "Receber em casa" : "Retirar na loja"}</strong>
+            <strong className="mt-1 block text-sm text-[#24002f]">{order.deliveryType === "delivery" ? "Receber em casa" : "Retirar no local"}</strong>
             {order.address && <span className="mt-1 flex items-start gap-1 text-xs leading-relaxed text-slate-600"><MapPin size={13} className="mt-0.5 shrink-0" /> {order.address}</span>}
           </div>
         </section>

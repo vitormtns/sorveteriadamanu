@@ -210,7 +210,7 @@ function Checkout({ cart, setCart, customer, setCustomer, error, submit, addMore
           <div>
             <Question icon={<Truck />} title="Como você quer receber?" text="Escolha uma opção." />
             <div className="grid grid-cols-2 gap-3">
-              <LargeOption active={customer.deliveryType === "pickup"} onClick={() => update({ deliveryType: "pickup" })} icon={<PackageCheck size={28} />} title="Retirar na loja" />
+              <LargeOption active={customer.deliveryType === "pickup"} onClick={() => update({ deliveryType: "pickup" })} icon={<PackageCheck size={28} />} title="Retirar no local" />
               <LargeOption active={customer.deliveryType === "delivery"} onClick={() => update({ deliveryType: "delivery" })} icon={<Truck size={28} />} title="Receber em casa" />
             </div>
           </div>
@@ -265,7 +265,7 @@ function Checkout({ cart, setCart, customer, setCustomer, error, submit, addMore
             <Question icon={<CheckCircle2 />} title="Conferir pedido" text="Confira os dados antes de enviar." />
             <CartReview cart={cart} setCart={setCart} />
             <div className="mt-4 grid gap-2 rounded-2xl bg-[#faf4f8] p-4 text-sm">
-              <ReviewLine label="Recebimento" value={customer.deliveryType === "delivery" ? "Receber em casa" : "Retirar na loja"} />
+              <ReviewLine label="Recebimento" value={customer.deliveryType === "delivery" ? "Receber em casa" : "Retirar no local"} />
               {customer.deliveryType === "delivery" && <ReviewLine label="Endereço" value={customer.address} />}
               <ReviewLine label="Nome" value={customer.name} />
               <ReviewLine label="WhatsApp" value={customer.phone} />

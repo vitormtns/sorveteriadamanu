@@ -36,7 +36,7 @@ export default function OrderDetailPage() {
       <div className="flex items-center justify-between gap-3">
         <Link href="/pedidos" className="flex items-center gap-2 text-sm font-bold text-slate-600"><ArrowLeft size={18} /> Voltar</Link>
         <div className="flex items-center gap-1.5">
-          <button type="button" disabled title="Impressão em breve" className="hidden min-h-10 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-slate-400 sm:flex"><Printer size={15} /> Imprimir</button>
+          <Link href={`/pedidos/${order.id}/imprimir`} aria-label="Imprimir via do cliente" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-semibold text-slate-600 transition hover:border-[#ccb6d0] hover:text-[var(--purple)]"><Printer size={15} /><span className="hidden sm:inline">Imprimir</span></Link>
           <PaymentStatusBadge status={order.paymentStatus} />
           <OrderStatusBadge status={order.orderStatus} />
         </div>
