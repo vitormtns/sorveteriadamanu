@@ -8,6 +8,7 @@ import { useStore } from "@/components/store-provider";
 import { Order } from "@/lib/types";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { formatPublicOrderCode, getPublicOrderCode } from "@/lib/order-code";
+import { paymentLabels } from "@/lib/settings";
 
 function TrackingTimeline({ order }: { order: Order }) {
   const readyLabel = order.deliveryType === "delivery" ? "Pronto para entrega" : "Pronto para retirada";
@@ -108,7 +109,7 @@ export default function TrackOrderPage() {
           <div className={`rounded-[22px] border p-4 ${order.paymentStatus === "paid" ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Pagamento</p>
             <strong className={`mt-1 block text-sm ${order.paymentStatus === "paid" ? "text-emerald-700" : "text-amber-800"}`}>{order.paymentStatus === "paid" ? "Pagamento confirmado" : "Pagamento pendente"}</strong>
-            <span className="mt-1 block text-xs text-slate-600">{order.paymentMethod}</span>
+            <span className="mt-1 block text-xs text-slate-600">{paymentLabels[order.paymentMethod]}</span>
           </div>
           <div className="rounded-[22px] border border-[#eadfea] bg-white p-4">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{order.deliveryType === "delivery" ? "Entrega" : "Retirada"}</p>
@@ -122,6 +123,7 @@ export default function TrackOrderPage() {
           <div className="mt-3 divide-y divide-[#f0e7ef]">
             {order.items.map((item) => <div key={item.id} className="flex items-start justify-between gap-3 py-3"><div className="min-w-0"><strong className="block text-sm">{item.quantity}× {item.productName}</strong></div><span className="shrink-0 text-sm font-bold">{formatCurrency(item.unitPrice * item.quantity)}</span></div>)}
           </div>
+          {!!order.deliveryFee && <div className="mt-2 flex items-center justify-between border-t border-[#eadfea] pt-3 text-sm text-slate-600"><span>Taxa de entrega</span><strong>{formatCurrency(order.deliveryFee)}</strong></div>}
           <div className="mt-2 flex items-center justify-between border-t border-[#eadfea] pt-4"><strong>Total</strong><strong className="text-xl text-[#6d2779]">{formatCurrency(order.total)}</strong></div>
         </section>
 

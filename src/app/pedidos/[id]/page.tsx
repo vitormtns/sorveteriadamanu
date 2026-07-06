@@ -9,6 +9,7 @@ import { Button, Card, Field, Select, Textarea } from "@/components/ui";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/status-badge";
 import { OrderStatus, PaymentStatus } from "@/lib/types";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { paymentLabels } from "@/lib/settings";
 
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -52,7 +53,7 @@ export default function OrderDetailPage() {
           </div>
           <div className="sm:text-right">
             <p className="font-semibold">{formatDateTime(order.createdAt)}</p>
-            <p className="mt-1 text-sm text-[var(--muted)]">{order.paymentMethod}</p>
+            <p className="mt-1 text-sm text-[var(--muted)]">{paymentLabels[order.paymentMethod]}</p>
           </div>
         </div>
         <div className="mt-4 grid gap-2 border-t border-[var(--border)] pt-4 sm:grid-cols-2">
@@ -77,7 +78,7 @@ export default function OrderDetailPage() {
             {order.paymentStatus === "pending" && <Button onClick={() => updateOrder(id, { paymentStatus: "paid" })}><Banknote size={17} /> Marcar como pago</Button>}
             {order.orderStatus === "new" && <Button variant="secondary" onClick={() => updateOrder(id, { orderStatus: "preparing" })}><ChefHat size={17} /> Iniciar preparo</Button>}
             {order.orderStatus === "preparing" && <Button variant="secondary" onClick={() => updateOrder(id, { orderStatus: "ready" })}><CheckCircle2 size={17} /> Marcar pronto</Button>}
-            {order.orderStatus === "ready" && <Button variant="secondary" onClick={() => updateOrder(id, { orderStatus: "delivered" })}><Truck size={17} /> Finalizar entrega</Button>}
+            {order.orderStatus === "ready" && <Button variant="secondary" onClick={() => updateOrder(id, { orderStatus: "delivered" })}>{order.deliveryType === "delivery" ? <Truck size={17} /> : <PackageCheck size={17} />} {order.deliveryType === "delivery" ? "Finalizar entrega" : "Finalizar retirada"}</Button>}
           </div>
         </Card>
       )}
@@ -93,6 +94,7 @@ export default function OrderDetailPage() {
               </div>
             ))}
           </div>
+          {!!order.deliveryFee && <div className="mt-3 flex justify-between border-t border-[var(--border)] pt-3 text-sm text-[var(--muted)]"><span>Taxa de entrega</span><strong>{formatCurrency(order.deliveryFee)}</strong></div>}
           <div className="mt-3 flex justify-between border-t border-[var(--border)] pt-4 text-xl font-extrabold"><span>Total</span><span>{formatCurrency(order.total)}</span></div>
         </Card>
 

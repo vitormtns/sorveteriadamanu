@@ -1,12 +1,27 @@
+"use client";
+
 import Link from "next/link";
-import { IceCreamBowl, ShoppingBag, Sparkles } from "lucide-react";
+import { IceCreamBowl, MessageCircle, ShoppingBag, Sparkles } from "lucide-react";
+import { useStore } from "@/components/store-provider";
+import { toDateInput } from "@/lib/utils";
 
 export function MobileLandingNav() {
+  const { settings } = useStore();
+  const today = toDateInput(new Date());
+  const hasFeaturedPromotion = settings.promotions.some((promotion) =>
+    promotion.active
+    && promotion.featuredOnHome
+    && promotion.title.trim()
+    && promotion.price > 0
+    && (!promotion.validUntil || promotion.validUntil >= today),
+  );
   return (
     <nav className="mobile-landing-nav" aria-label="Ações principais">
       <a href="#cardapio" className="mobile-landing-nav__secondary"><IceCreamBowl size={20} /> Cardápio</a>
       <Link href="/delivery" className="mobile-landing-nav__primary"><ShoppingBag size={20} /> Fazer pedido</Link>
-      <a href="#promocoes" className="mobile-landing-nav__secondary"><Sparkles size={20} /> Promoções</a>
+      {hasFeaturedPromotion
+        ? <a href="#promocoes" className="mobile-landing-nav__secondary"><Sparkles size={20} /> Promoções</a>
+        : <a href="#contato" className="mobile-landing-nav__secondary"><MessageCircle size={20} /> Contato</a>}
     </nav>
   );
 }

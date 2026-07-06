@@ -24,7 +24,7 @@ export default function ProductsPage() {
       id: editing?.id,
       name: String(data.get("name")),
       category: data.get("category") as ProductCategory,
-      price: Number(String(data.get("price")).replace(",", ".")),
+      price: Math.max(0, Number(String(data.get("price")).replace(",", ".")) || 0),
       active: data.get("active") === "on",
       availableToday: data.get("availableToday") === "on",
       featured: data.get("featured") === "on",

@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   BadgePercent,
@@ -25,9 +25,20 @@ import { uid } from "@/lib/utils";
 type ItemListKey = "acaiExtras" | "iceCreamFlavors" | "milkshakeFlavors";
 
 export default function SettingsPage() {
-  const { products, settings, updateSettings } = useStore();
+  const { products, settings, settingsSaveError, updateSettings } = useStore();
+  const [saveState, setSaveState] = useState<"saving" | "saved">("saved");
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const update = (recipe: (current: StoreSettings) => StoreSettings) => updateSettings(recipe);
+  useEffect(() => () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+  }, []);
+
+  const update = (recipe: (current: StoreSettings) => StoreSettings) => {
+    setSaveState("saving");
+    updateSettings(recipe);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => setSaveState("saved"), 450);
+  };
   const setStatus = <K extends keyof StoreSettings["status"]>(key: K, value: StoreSettings["status"][K]) =>
     update((current) => ({ ...current, status: { ...current.status, [key]: value } }));
   const setDelivery = <K extends keyof StoreSettings["delivery"]>(key: K, value: StoreSettings["delivery"][K]) =>
@@ -60,7 +71,9 @@ export default function SettingsPage() {
   function updatePromotion(id: string, patch: Partial<Promotion>) {
     update((current) => ({
       ...current,
-      promotions: current.promotions.map((promotion) => promotion.id === id ? { ...promotion, ...patch } : promotion),
+      promotions: current.promotions.map((promotion) => promotion.id === id
+        ? { ...promotion, ...patch }
+        : patch.featuredOnHome ? { ...promotion, featuredOnHome: false } : promotion),
     }));
   }
 
@@ -97,17 +110,17 @@ export default function SettingsPage() {
           <h2 className="text-2xl font-extrabold tracking-[-.04em] text-[var(--text)]">Configurações da loja</h2>
           <p className="mt-1 max-w-2xl text-sm text-[var(--muted)]">Gerencie a operação, o delivery e o conteúdo do site. As alterações são salvas automaticamente neste dispositivo.</p>
         </div>
-        <span className="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700"><Save size={15} /> Salvamento automático</span>
+        <span role="status" className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${settingsSaveError ? "bg-red-50 text-red-700" : saveState === "saved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}><Save size={15} /> {settingsSaveError ? "Não foi possível salvar" : saveState === "saved" ? "Alterações salvas" : "Salvando..."}</span>
       </div>
 
       <Section icon={<Store />} title="Status da loja" description="Controle rapidamente quando os pedidos online podem entrar." open>
         <div className="grid gap-3 sm:grid-cols-2">
           <Toggle label="Delivery aberto" description="Libera o funcionamento conforme os horários cadastrados." checked={settings.status.deliveryOpen} onChange={(value) => setStatus("deliveryOpen", value)} />
-          <Toggle label="Pausar pedidos online" description="Interrompe novos pedidos sem alterar os horários." checked={settings.status.pauseOnlineOrders} onChange={(value) => setStatus("pauseOnlineOrders", value)} />
+          <Toggle label="Pausar pedidos online" description="Use como chave geral para interromper novos pedidos." checked={settings.status.pauseOnlineOrders} onChange={(value) => setStatus("pauseOnlineOrders", value)} />
           <Toggle label="Permitir retirada" checked={settings.status.allowPickup} onChange={(value) => setStatus("allowPickup", value)} />
           <Toggle label="Permitir entrega" checked={settings.status.allowDelivery} onChange={(value) => setStatus("allowDelivery", value)} />
-          <Toggle label="Fechado hoje" description="Vale até você desmarcar esta opção." checked={settings.status.closedToday} onChange={(value) => setStatus("closedToday", value)} />
-          <Toggle label="Pausa temporária" description="Use em períodos de alta demanda ou imprevistos." checked={settings.status.temporaryPause} onChange={(value) => setStatus("temporaryPause", value)} />
+          <Toggle label="Fechado hoje" description="Indisponibiliza os pedidos durante todo o dia, até você desmarcar." checked={settings.status.closedToday} onChange={(value) => setStatus("closedToday", value)} />
+          <Toggle label="Pausa temporária" description="Use por alguns minutos em períodos de alta demanda ou imprevistos." checked={settings.status.temporaryPause} onChange={(value) => setStatus("temporaryPause", value)} />
         </div>
         <Field label="Mensagem exibida quando fechado">
           <Textarea value={settings.status.closedMessage} onChange={(event) => setStatus("closedMessage", event.target.value)} rows={3} placeholder="Informe quando os pedidos voltarão." />
@@ -129,11 +142,11 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      <Section icon={<Truck />} title="Entrega" description="Ajuste a cobrança e as orientações mostradas ao cliente.">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Taxa de entrega"><Input type="number" inputMode="decimal" min="0" step="0.01" value={settings.delivery.fee} onChange={(event) => setDelivery("fee", Number(event.target.value))} /></Field>
-          <Field label="Observação de entrega"><Textarea value={settings.delivery.note} onChange={(event) => setDelivery("note", event.target.value)} rows={2} placeholder="Ex.: consulte os bairros atendidos." /></Field>
+      <Section icon={<Truck />} title="Entrega" description="Defina o valor acrescentado aos pedidos entregues.">
+        <div className="max-w-sm">
+          <Field label="Taxa de entrega"><Input type="number" inputMode="decimal" min="0" step="0.01" value={settings.delivery.fee} onChange={(event) => setDelivery("fee", Math.max(0, Number(event.target.value) || 0))} /></Field>
         </div>
+        <p className="text-xs text-[var(--muted)]">Este valor é acrescentado ao total quando o cliente escolhe receber em casa.</p>
       </Section>
 
       <Section icon={<CreditCard />} title="Pagamentos" description="Somente as formas ativas aparecem no checkout do delivery.">
@@ -166,22 +179,22 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      <Section icon={<BadgePercent />} title="Promoções" description="Promoções ativas aparecem no delivery; o destaque principal também pode aparecer na landing.">
+      <Section icon={<BadgePercent />} title="Promoções" description="Promoções ativas aparecem no delivery; uma delas pode ganhar destaque na página inicial.">
         <div className="grid gap-3">
           {settings.promotions.map((promotion) => (
             <article key={promotion.id} className="grid gap-4 rounded-2xl border border-[var(--border)] bg-[#fffdfa] p-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Título"><Input value={promotion.title} onChange={(event) => updatePromotion(promotion.id, { title: event.target.value })} /></Field>
-                <Field label="Preço"><Input type="number" min="0" step="0.01" value={promotion.price} onChange={(event) => updatePromotion(promotion.id, { price: Number(event.target.value) })} /></Field>
+                <Field label="Preço"><Input type="number" min="0" step="0.01" value={promotion.price} onChange={(event) => updatePromotion(promotion.id, { price: Math.max(0, Number(event.target.value) || 0) })} /></Field>
                 <Field label="Descrição"><Textarea value={promotion.description} onChange={(event) => updatePromotion(promotion.id, { description: event.target.value })} rows={2} /></Field>
                 <Field label="Validade (opcional)"><Input type="date" value={promotion.validUntil ?? ""} onChange={(event) => updatePromotion(promotion.id, { validUntil: event.target.value || undefined })} /></Field>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 <Toggle compact label="Ativa" checked={promotion.active} onChange={(value) => updatePromotion(promotion.id, { active: value })} />
-                <Toggle compact label="Destaque na home" checked={promotion.featuredOnHome} onChange={(value) => updatePromotion(promotion.id, { featuredOnHome: value })} />
+                <Toggle compact label="Destaque na página inicial" checked={promotion.featuredOnHome} onChange={(value) => updatePromotion(promotion.id, { featuredOnHome: value })} />
                 <button type="button" onClick={() => removePromotion(promotion.id)} className="ml-auto inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-bold text-red-700 hover:bg-red-50"><Trash2 size={16} /> Excluir</button>
               </div>
-              <p className="text-xs text-[var(--muted)]">Imagem preparada no modelo de dados para integração futura com o armazenamento do Supabase.</p>
+              <p className="text-xs text-[var(--muted)]">O envio de imagens poderá ser adicionado em uma próxima versão.</p>
             </article>
           ))}
           {!settings.promotions.length && <Empty text="Nenhuma promoção cadastrada." />}
@@ -204,7 +217,7 @@ export default function SettingsPage() {
 
       <Section icon={<MapPin />} title="Textos e contatos do site" description="Atualize os principais textos públicos sem alterar o código.">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Frase principal da landing"><Input value={settings.site.headline} onChange={(event) => setSite("headline", event.target.value)} /></Field>
+          <Field label="Frase principal do site"><Input value={settings.site.headline} onChange={(event) => setSite("headline", event.target.value)} /></Field>
           <Field label="Subtítulo"><Textarea value={settings.site.subtitle} onChange={(event) => setSite("subtitle", event.target.value)} rows={2} /></Field>
           <Field label="WhatsApp"><Input value={settings.site.whatsapp} onChange={(event) => setSite("whatsapp", event.target.value)} placeholder="(00) 00000-0000" /></Field>
           <Field label="Endereço"><Input value={settings.site.address} onChange={(event) => setSite("address", event.target.value)} /></Field>
@@ -248,7 +261,7 @@ function ConfigurableList({ items, kind, onAdd, onUpdate, onRemove }: { items: C
         <div key={item.id} className="grid gap-2 rounded-xl border border-[var(--border)] bg-[#fffdfa] p-3 sm:grid-cols-[minmax(180px,1fr)_140px_auto_auto] sm:items-end">
           <Field label="Nome"><Input value={item.name} onChange={(event) => onUpdate(item.id, { name: event.target.value })} /></Field>
           {kind === "extra"
-            ? <Field label="Valor após 3 grátis"><Input type="number" min="0" step="0.01" value={item.extraPrice ?? 0} onChange={(event) => onUpdate(item.id, { extraPrice: Number(event.target.value) })} /></Field>
+            ? <Field label="Valor após 3 grátis"><Input type="number" min="0" step="0.01" value={item.extraPrice ?? 0} onChange={(event) => onUpdate(item.id, { extraPrice: Math.max(0, Number(event.target.value) || 0) })} /></Field>
             : <Field label="Cor da prévia"><Input aria-label={`Cor da prévia de ${item.name}`} type="color" value={item.previewColor ?? "#8b5a75"} onChange={(event) => onUpdate(item.id, { previewColor: event.target.value })} className="p-2" /></Field>}
           <Toggle compact label={item.available ? "Disponível" : "Indisponível"} checked={item.available} onChange={(value) => onUpdate(item.id, { available: value })} />
           <button type="button" aria-label={`Excluir ${item.name}`} onClick={() => onRemove(item.id)} className="grid h-11 w-11 place-items-center rounded-xl text-red-700 hover:bg-red-50"><Trash2 size={17} /></button>

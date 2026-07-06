@@ -44,7 +44,6 @@ export const initialSettings: StoreSettings = {
   },
   delivery: {
     fee: 5,
-    note: "Consulte a disponibilidade para o seu bairro.",
   },
   payments: {
     accepted: {
@@ -103,10 +102,10 @@ export const initialSettings: StoreSettings = {
   site: {
     headline: "Monte, peça e aproveite.",
     subtitle: "Açaí, sorvetes e milk-shakes preparados para retirada ou delivery.",
-    whatsapp: "(00) 00000-0000",
-    address: "Endereço em atualização",
-    instagram: "@sorveteriadamanu",
-    displayedHours: "Consulte o horário do dia",
+    whatsapp: "",
+    address: "",
+    instagram: "",
+    displayedHours: "Todos os dias, das 12h às 22h",
   },
 };
 
@@ -119,6 +118,10 @@ export const paymentLabels: Record<PaymentMethod, string> = {
 
 export function normalizeSettings(saved?: Partial<StoreSettings> | null): StoreSettings {
   if (!saved) return initialSettings;
+  const site = { ...initialSettings.site, ...saved.site };
+  if (site.whatsapp === "(00) 00000-0000") site.whatsapp = "";
+  if (site.address === "Endereço em atualização") site.address = "";
+  if (site.displayedHours === "Consulte o horário do dia") site.displayedHours = initialSettings.site.displayedHours;
   return {
     ...initialSettings,
     ...saved,
@@ -130,7 +133,9 @@ export function normalizeSettings(saved?: Partial<StoreSettings> | null): StoreS
         { ...value, ...saved.businessHours?.[key as WeekdayKey] },
       ]),
     ) as StoreSettings["businessHours"],
-    delivery: { ...initialSettings.delivery, ...saved.delivery },
+    delivery: {
+      fee: Math.max(0, Number(saved.delivery?.fee ?? initialSettings.delivery.fee) || 0),
+    },
     payments: {
       ...initialSettings.payments,
       ...saved.payments,
@@ -140,30 +145,62 @@ export function normalizeSettings(saved?: Partial<StoreSettings> | null): StoreS
     acaiExtras: saved.acaiExtras ?? initialSettings.acaiExtras,
     iceCreamFlavors: saved.iceCreamFlavors ?? initialSettings.iceCreamFlavors,
     milkshakeFlavors: saved.milkshakeFlavors ?? initialSettings.milkshakeFlavors,
-    site: { ...initialSettings.site, ...saved.site },
+    site,
   };
 }
 
 export function getStoreAvailability(settings: StoreSettings, now = new Date()) {
-  const key = (["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as WeekdayKey[])[now.getDay()];
+  const keys = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as WeekdayKey[];
+  const key = keys[now.getDay()];
+  const previousKey = keys[(now.getDay() + 6) % 7];
   const hours = settings.businessHours[key];
-  const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  const withinHours = hours.enabled && currentTime >= hours.open && currentTime <= hours.close;
+  const previousHours = settings.businessHours[previousKey];
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const toMinutes = (value: string) => {
+    const [hour, minute] = value.split(":").map(Number);
+    return hour * 60 + minute;
+  };
+  const isWithinStartingDay = (schedule: typeof hours) => {
+    if (!schedule.enabled) return false;
+    const open = toMinutes(schedule.open);
+    const close = toMinutes(schedule.close);
+    return close >= open
+      ? currentMinutes >= open && currentMinutes <= close
+      : currentMinutes >= open;
+  };
+  const isWithinPreviousNight = (schedule: typeof hours) => {
+    if (!schedule.enabled) return false;
+    const open = toMinutes(schedule.open);
+    const close = toMinutes(schedule.close);
+    return close < open && currentMinutes <= close;
+  };
+  const withinToday = isWithinStartingDay(hours);
+  const withinPreviousNight = isWithinPreviousNight(previousHours);
+  const withinHours = withinToday || withinPreviousNight;
+  const activeHours = withinPreviousNight ? previousHours : hours;
+  const closedMessage = settings.status.closedMessage.trim() || "No momento, não estamos recebendo pedidos online.";
+  const hasFulfillment = settings.status.allowDelivery || settings.status.allowPickup;
   const manuallyUnavailable = !settings.status.deliveryOpen
     || settings.status.pauseOnlineOrders
     || settings.status.closedToday
     || settings.status.temporaryPause;
-  const acceptingOrders = !manuallyUnavailable
-    && withinHours
-    && (settings.status.allowDelivery || settings.status.allowPickup);
+  const acceptingOrders = !manuallyUnavailable && withinHours && hasFulfillment;
+  const scheduledMessage = hours.enabled
+    ? `${closedMessage} Horário de hoje: ${hours.open} às ${hours.close}.`
+    : `${closedMessage} Hoje não teremos atendimento.`;
+  const message = acceptingOrders
+    ? `Delivery aberto até ${activeHours.close}.`
+    : manuallyUnavailable
+      ? closedMessage
+      : !hasFulfillment
+        ? "Retirada e entrega estão indisponíveis no momento."
+        : scheduledMessage;
 
   return {
     acceptingOrders,
     withinHours,
     todayLabel: weekdayLabels[key],
     todayHours: hours.enabled ? `${hours.open} às ${hours.close}` : "Fechado",
-    message: acceptingOrders
-      ? `Delivery aberto hoje, das ${hours.open} às ${hours.close}.`
-      : settings.status.closedMessage,
+    message,
   };
 }

@@ -9,6 +9,7 @@ import { OperationalOrderCard } from "@/components/operational-order-card";
 import { Card, Input, Select } from "@/components/ui";
 import { Order } from "@/lib/types";
 import { formatCurrency, formatDate, isSameDay, toDateInput } from "@/lib/utils";
+import { paymentLabels } from "@/lib/settings";
 
 const statusFilters = [
   { id: "new", label: "Novos" },
@@ -137,7 +138,7 @@ function ClosingSummary({ orders }: { orders: Order[] }) {
           <div className="mt-3 divide-y divide-[var(--border)]">
             {methods.map(({ method, quantity, total }) => (
               <div key={method} className="flex items-center justify-between py-2.5 text-sm">
-                <span>{method} <small className="text-[var(--muted)]">· {quantity} {quantity === 1 ? "pedido" : "pedidos"}</small></span>
+                <span>{paymentLabels[method]} <small className="text-[var(--muted)]">· {quantity} {quantity === 1 ? "pedido" : "pedidos"}</small></span>
                 <strong>{formatCurrency(total)}</strong>
               </div>
             ))}

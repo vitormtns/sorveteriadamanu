@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { useStore } from "@/components/store-provider";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { formatPublicOrderCode } from "@/lib/order-code";
+import { paymentLabels } from "@/lib/settings";
 
 export default function PrintOrderPage() {
   const { id } = useParams<{ id: string }>();
@@ -63,7 +64,7 @@ export default function PrintOrderPage() {
           {order.phone && <p><strong>Telefone:</strong> {order.phone}</p>}
           <p><strong>Tipo:</strong> {order.deliveryType === "delivery" ? "Entrega" : "Retirada"}</p>
           {order.address && <p className="break-words"><strong>Endereço:</strong> {order.address}</p>}
-          <p><strong>Pagamento:</strong> {order.paymentMethod}</p>
+          <p><strong>Pagamento:</strong> {paymentLabels[order.paymentMethod]}</p>
           <p><strong>Situação:</strong> {order.paymentStatus === "paid" ? "Pago" : "Pendente"}</p>
         </section>
 
@@ -86,6 +87,7 @@ export default function PrintOrderPage() {
 
         <div className="my-4 border-t border-dashed border-black" />
 
+        {!!order.deliveryFee && <div className="mb-2 flex items-center justify-between"><span>Taxa de entrega</span><strong>{formatCurrency(order.deliveryFee)}</strong></div>}
         <div className="flex items-center justify-between text-[15px] font-black">
           <span>Total</span>
           <span>{formatCurrency(order.total)}</span>

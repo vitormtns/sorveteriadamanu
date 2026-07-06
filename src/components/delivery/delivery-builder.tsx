@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronLeft, CreditCard, IceCreamBowl, MapPin, MessageCircle, Minus, PackageCheck, Plus, ShoppingBag, Sparkles, Trash2, Truck, UserRound } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { useStore } from "@/components/store-provider";
 import { ConfigurableItem, PaymentMethod, Promotion, StoreSettings } from "@/lib/types";
-import { formatCurrency, uid } from "@/lib/utils";
+import { formatCurrency, toDateInput, uid } from "@/lib/utils";
 import { formatPhone, isValidPhone } from "@/lib/phone";
 import { createPublicOrderCode } from "@/lib/order-code";
 import { getStoreAvailability, paymentLabels } from "@/lib/settings";
@@ -27,6 +27,7 @@ const emptyCustomer: Customer = { name: "", phone: "", deliveryType: "", address
 
 export function DeliveryBuilder() {
   const { addOrder, settings } = useStore();
+  const [availabilityNow, setAvailabilityNow] = useState(() => new Date());
   const [kind, setKind] = useState<Kind | null>(null);
   const [step, setStep] = useState(0);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -39,19 +40,26 @@ export function DeliveryBuilder() {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const deliveryFee = customer.deliveryType === "delivery" ? settings.delivery.fee : 0;
   const total = subtotal + deliveryFee;
-  const availability = getStoreAvailability(settings);
-  const extras = settings.acaiExtras.filter((item) => item.available);
-  const flavors = settings.iceCreamFlavors.filter((item) => item.available);
-  const shakeFlavors = settings.milkshakeFlavors.filter((item) => item.available);
-  const today = new Date().toISOString().slice(0, 10);
+  const availability = getStoreAvailability(settings, availabilityNow);
+  const extras = settings.acaiExtras.filter((item) => item.available && item.name.trim());
+  const flavors = settings.iceCreamFlavors.filter((item) => item.available && item.name.trim());
+  const shakeFlavors = settings.milkshakeFlavors.filter((item) => item.available && item.name.trim());
+  const today = toDateInput(new Date());
   const promotions = settings.promotions.filter((promotion) =>
-    promotion.active && (!promotion.validUntil || promotion.validUntil >= today),
+    promotion.active
+    && promotion.title.trim()
+    && promotion.price > 0
+    && (!promotion.validUntil || promotion.validUntil >= today),
   );
   const acceptedPayments = (Object.keys(settings.payments.accepted) as PaymentMethod[])
     .filter((method) => settings.payments.accepted[method]);
   const flavorColors = Object.fromEntries(
     [...settings.iceCreamFlavors, ...settings.milkshakeFlavors].map((flavor) => [flavor.name, flavor.previewColor]),
   );
+  useEffect(() => {
+    const timer = window.setInterval(() => setAvailabilityNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const itemPrice = useMemo(() => kind === "acai"
     ? (sizes.find(x => x.name === size)?.price || 0) + selectedExtras.slice(FREE_ACAI_EXTRAS).reduce((sum, name) => sum + (extras.find(x => x.name === name)?.extraPrice || 0), 0)
     : kind === "milkshake" ? (shakeSizes.find(x => x.name === shakeSize)?.price || 0)
@@ -76,9 +84,20 @@ export function DeliveryBuilder() {
     reset();
   };
   const submit = () => {
-    const validation = !availability.acceptingOrders ? availability.message : !customer.deliveryType ? "Escolha como você quer receber." : customer.deliveryType === "delivery" && !customer.address.trim() ? "Informe o endereço para entrega." : !customer.name.trim() ? "Informe seu nome." : !customer.phone.trim() ? "Informe seu telefone." : !isValidPhone(customer.phone) ? "Informe um telefone válido com DDD." : !customer.payment ? "Escolha uma forma de pagamento." : !acceptedPayments.includes(customer.payment as PaymentMethod) ? "A forma de pagamento escolhida não está disponível." : !cart.length ? "Adicione pelo menos um item ao pedido." : "";
+    const currentAvailability = getStoreAvailability(settings);
+    const validation = !currentAvailability.acceptingOrders ? currentAvailability.message
+      : !customer.deliveryType ? "Escolha como você quer receber."
+      : customer.deliveryType === "pickup" && !settings.status.allowPickup ? "A retirada não está disponível no momento."
+      : customer.deliveryType === "delivery" && !settings.status.allowDelivery ? "A entrega não está disponível no momento."
+      : customer.deliveryType === "delivery" && !customer.address.trim() ? "Informe o endereço para entrega."
+      : !customer.name.trim() ? "Informe seu nome."
+      : !customer.phone.trim() ? "Informe seu telefone."
+      : !isValidPhone(customer.phone) ? "Informe um telefone válido com DDD."
+      : !customer.payment ? "Escolha uma forma de pagamento."
+      : !acceptedPayments.includes(customer.payment as PaymentMethod) ? "A forma de pagamento escolhida não está disponível."
+      : !cart.length ? "Adicione pelo menos um item ao pedido." : "";
     if (validation) return setError(validation);
-    const id = addOrder({ customerName: customer.name.trim(), phone: customer.phone.trim(), items: cart.map(item => ({ id: item.id, productId: item.productId, productName: `${item.name} — ${item.detail}`, quantity: item.quantity, unitPrice: item.price })), notes: customer.notes.trim() || undefined, paymentMethod: customer.payment as PaymentMethod, paymentStatus: "pending", orderStatus: "new", status: "pending_payment", total, origin: "delivery", deliveryType: customer.deliveryType as "pickup" | "delivery", address: customer.deliveryType === "delivery" ? customer.address.trim() : undefined });
+    const id = addOrder({ customerName: customer.name.trim(), phone: customer.phone.trim(), items: cart.map(item => ({ id: item.id, productId: item.productId, productName: `${item.name} — ${item.detail}`, quantity: item.quantity, unitPrice: item.price })), notes: customer.notes.trim() || undefined, paymentMethod: customer.payment as PaymentMethod, paymentStatus: "pending", orderStatus: "new", status: "pending_payment", total, origin: "delivery", deliveryType: customer.deliveryType as "pickup" | "delivery", deliveryFee: customer.deliveryType === "delivery" ? deliveryFee : 0, address: customer.deliveryType === "delivery" ? customer.address.trim() : undefined });
     setOrderId(id);
   };
   if (orderId) return <Success id={orderId} restart={() => { setOrderId(""); setCart([]); setCustomer(emptyCustomer); reset(); }} />;
@@ -89,7 +108,7 @@ export function DeliveryBuilder() {
       <div className="mx-auto max-w-6xl px-4 pb-32 pt-5 md:px-8 md:pt-8">
         {(building || step === 0) && <div className="mb-5 flex items-center justify-between"><button onClick={() => step === 0 ? reset() : setStep(x => x - 1)} className="flex min-h-11 items-center gap-1 text-sm font-bold text-[#4a0b63]"><ChevronLeft size={20} /> Voltar</button>{building && <div className="flex gap-2" aria-label={`Etapa ${step + 1} de ${stepCount}`}>{Array.from({ length: stepCount }).map((_, i) => <span key={i} className={`h-2 rounded-full transition-all ${i <= step ? "w-7 bg-[#c83d76]" : "w-2 bg-[#dfd3df]"}`} />)}</div>}<span className="text-xs font-bold uppercase tracking-[.12em] text-[#7b6b7d]">{building ? `${step + 1}/${stepCount}` : "Promoções"}</span></div>}
         {building ? <div className="grid gap-6 md:grid-cols-[.9fr_1.1fr] md:items-start lg:gap-12"><div className="md:sticky md:top-28"><Preview kind={kind} format={format} scoop={scoop} shakeSize={shakeSize} flavors={selectedFlavors} extras={selectedExtras} topping={kind === "milkshake" ? shakeFlavor : iceExtra} flavorColors={flavorColors} /><p className="mt-3 text-center text-sm font-bold text-[#4a0b63]">{itemPrice ? formatCurrency(itemPrice) : "Monte do seu jeito"}</p></div><section className="rounded-[28px] border border-[#eadfea] bg-white p-5 shadow-[0_20px_70px_rgba(50,8,65,.08)] md:p-8">{kind === "acai" ? <AcaiStep step={step} size={size} setSize={setSize} selected={selectedExtras} toggle={name => setSelectedExtras(current => current.includes(name) ? current.filter(x => x !== name) : [...current, name])} note={acaiNote} setNote={setAcaiNote} extras={extras} /> : kind === "milkshake" ? <ShakeStep step={step} size={shakeSize} setSize={setShakeSize} flavor={shakeFlavor} setFlavor={setShakeFlavor} note={shakeNote} setNote={setShakeNote} flavors={shakeFlavors} /> : <IceStep step={step} format={format} setFormat={setFormat} scoop={scoop} setScoop={value => { setScoop(value); setSelectedFlavors([]); }} selected={selectedFlavors} select={selectFlavor} extra={iceExtra} setExtra={setIceExtra} flavors={flavors} />}</section></div>
-          : step === 0 ? <Promotions promotions={promotions} add={promo => { setCart(current => [...current, { id: uid(), productId: promo.id, name: promo.title, detail: promo.description, price: promo.price, quantity: 1 }]); setStep(1); }} /> : <Checkout cart={cart} setCart={setCart} customer={customer} setCustomer={setCustomer} error={error} submit={submit} addMore={reset} deliveryFee={deliveryFee} acceptedPayments={acceptedPayments} settings={settings} canSubmit={availability.acceptingOrders} />}
+          : step === 0 ? <Promotions promotions={promotions} add={promo => { setCart(current => [...current, { id: uid(), productId: promo.id, name: promo.title, detail: promo.description, price: promo.price, quantity: 1 }]); setStep(1); }} /> : <Checkout cart={cart} setCart={setCart} customer={customer} setCustomer={setCustomer} error={error} submit={submit} addMore={reset} deliveryFee={deliveryFee} acceptedPayments={acceptedPayments} settings={settings} canSubmit={availability.acceptingOrders} availabilityMessage={availability.message} />}
       </div>}
     {building && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#3a0a4d]/10 bg-[#fffaf4]/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl"><button disabled={!canAdvance} onClick={() => step < stepCount - 1 ? setStep(x => x + 1) : addBuilt()} className="mx-auto flex min-h-14 w-full max-w-xl items-center justify-center gap-2 rounded-2xl bg-[#f8b900] px-5 font-extrabold text-[#24002f] shadow-lg disabled:opacity-40">{step === stepCount - 1 ? <><Plus size={20} /> Adicionar ao pedido</> : <>Continuar <ArrowRight size={19} /></>}</button></div>}
   </main>;
@@ -117,12 +136,12 @@ function AcaiStep({ step, size, setSize, selected, toggle, note, setNote, extras
 function IceStep({ step, format, setFormat, scoop, setScoop, selected, select, extra, setExtra, flavors }: { step: number; format: string; setFormat: SetText; scoop: string; setScoop: SetText; selected: string[]; select: SetText; extra: string; setExtra: SetText; flavors: ConfigurableItem[] }) {
   if (step === 0) return <><Heading title="Como você quer?" text="Escolha onde vamos servir seu sorvete." /><Options values={formats.map(x => ({ label: x.name, sub: x.price ? `+ ${formatCurrency(x.price)}` : undefined }))} selected={format} choose={setFormat} /></>;
   if (step === 1) return <><Heading title="Quantas bolas?" text="Escolha o tamanho do seu sorvete." /><Options values={scoops.map(x => ({ label: x.name, sub: formatCurrency(x.price) }))} selected={scoop} choose={setScoop} /></>;
-  if (step === 2) return <><Heading title="Escolha os sabores" text={`Você pode escolher até ${scoops.find(x => x.name === scoop)?.max || 1} sabores.`} /><Options values={flavors.map((flavor) => ({ label: flavor.name }))} selected={selected} choose={select} /></>;
+  if (step === 2) return <><Heading title="Escolha os sabores" text={`Você pode escolher até ${scoops.find(x => x.name === scoop)?.max || 1} sabores.`} />{flavors.length ? <Options values={flavors.map((flavor) => ({ label: flavor.name }))} selected={selected} choose={select} /> : <UnavailableOption text="Nenhum sabor de sorvete está disponível no momento." />}</>;
   return <><Heading title="O toque final" text="Escolha uma cobertura ou adicional." /><Options values={iceExtras.map(label => ({ label }))} selected={extra} choose={setExtra} /></>;
 }
 function ShakeStep({ step, size, setSize, flavor, setFlavor, note, setNote, flavors }: { step: number; size: string; setSize: SetText; flavor: string; setFlavor: SetText; note: string; setNote: SetText; flavors: ConfigurableItem[] }) {
   if (step === 0) return <><Heading title="Escolha o tamanho" text="Qual tamanho combina com a sua vontade?" /><Options values={shakeSizes.map(x => ({ label: x.name, sub: formatCurrency(x.price) }))} selected={size} choose={setSize} /></>;
-  if (step === 1) return <><Heading title="Escolha o sabor" text="Seu milk-shake começa por aqui." /><Options values={flavors.map((item) => ({ label: item.name }))} selected={flavor} choose={setFlavor} /></>;
+  if (step === 1) return <><Heading title="Escolha o sabor" text="Seu milk-shake começa por aqui." />{flavors.length ? <Options values={flavors.map((item) => ({ label: item.name }))} selected={flavor} choose={setFlavor} /> : <UnavailableOption text="Nenhum sabor de milk-shake está disponível no momento." />}</>;
   return <><Heading title="Alguma observação?" text="Este campo é opcional." /><label className="grid gap-2 text-sm font-bold">Observação<textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Ex.: sem canudo..." rows={4} className="rounded-2xl border border-[#dfd2df] p-4 font-normal outline-none focus:border-[#6d2779]" /></label></>;
 }
 
@@ -141,7 +160,7 @@ function Promotions({ promotions, add }: { promotions: Promotion[]; add: (promo:
   return <section><Heading title="Promoções prontas" text="Escolha uma combinação e siga para os dados do pedido." /><div className="grid gap-4 md:grid-cols-2">{promotions.map((promo, index) => <article key={promo.id} className={`relative min-h-56 overflow-hidden rounded-[28px] bg-gradient-to-br p-6 text-white shadow-lg ${index % 2 ? "from-[#9d285b] to-[#51103b]" : "from-[#5b126f] to-[#2d073b]"}`}><div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" /><span className="text-xs font-bold uppercase tracking-[.14em] text-[#ffd75c]">Escolha da Manu</span><h3 className="mt-5 text-2xl font-extrabold tracking-[-.04em]">{promo.title}</h3><p className="mt-2 max-w-sm text-sm leading-relaxed text-white/70">{promo.description}</p><div className="mt-6 flex items-center justify-between"><strong className="text-xl">{formatCurrency(promo.price)}</strong><button onClick={() => add(promo)} className="min-h-11 rounded-full bg-[#f8b900] px-5 text-sm font-extrabold text-[#24002f]">Pedir agora</button></div></article>)}</div></section>;
 }
 
-function Checkout({ cart, setCart, customer, setCustomer, error, submit, addMore, deliveryFee, acceptedPayments, settings, canSubmit }: { cart: CartItem[]; setCart: React.Dispatch<React.SetStateAction<CartItem[]>>; customer: Customer; setCustomer: React.Dispatch<React.SetStateAction<Customer>>; error: string; submit: () => void; addMore: () => void; deliveryFee: number; acceptedPayments: PaymentMethod[]; settings: StoreSettings; canSubmit: boolean }) {
+function Checkout({ cart, setCart, customer, setCustomer, error, submit, addMore, deliveryFee, acceptedPayments, settings, canSubmit, availabilityMessage }: { cart: CartItem[]; setCart: React.Dispatch<React.SetStateAction<CartItem[]>>; customer: Customer; setCustomer: React.Dispatch<React.SetStateAction<Customer>>; error: string; submit: () => void; addMore: () => void; deliveryFee: number; acceptedPayments: PaymentMethod[]; settings: StoreSettings; canSubmit: boolean; availabilityMessage: string }) {
   const [stage, setStage] = useState<CheckoutStage>("review");
   const [stageError, setStageError] = useState("");
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -286,10 +305,10 @@ function Checkout({ cart, setCart, customer, setCustomer, error, submit, addMore
             {deliveryFee > 0 && <div className="mt-4 flex items-center justify-between border-t border-[#eadfea] pt-4 text-sm text-[#796b7b]"><span>Subtotal</span><strong>{formatCurrency(subtotal)}</strong></div>}
             {deliveryFee > 0 && <div className="mt-2 flex items-center justify-between text-sm text-[#796b7b]"><span>Taxa de entrega</span><strong>{formatCurrency(deliveryFee)}</strong></div>}
             <div className={`${deliveryFee > 0 ? "mt-2" : "mt-4 border-t border-[#eadfea] pt-4"} flex items-center justify-between text-lg`}><strong>Total</strong><strong>{formatCurrency(total)}</strong></div>
-            {customer.deliveryType === "delivery" && settings.delivery.note && <p className="mt-3 text-xs leading-relaxed text-[#817284]">{settings.delivery.note}</p>}
           </div>
         )}
 
+        {!canSubmit && <p role="alert" className="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-900">{availabilityMessage}</p>}
         {(stageError || error) && <p role="alert" className="mt-4 rounded-xl bg-[#fff0f3] p-3 text-sm font-bold text-[#a52d54]">{stageError || error}</p>}
         <button onClick={next} disabled={stage === "confirm" && !canSubmit} className="mt-6 hidden min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#f8b900] px-5 font-extrabold text-[#24002f] shadow-sm disabled:cursor-not-allowed disabled:opacity-40 md:flex">{primaryLabel} <ArrowRight size={19} /></button>
       </section>
@@ -306,6 +325,10 @@ function Checkout({ cart, setCart, customer, setCustomer, error, submit, addMore
 
 function Question({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
   return <div className="mb-6"><span className="grid h-11 w-11 place-items-center rounded-xl bg-[#f1e4f1] text-[#6d2779]">{icon}</span><h2 className="mt-4 text-2xl font-extrabold tracking-[-.04em] text-[#24002f]">{title}</h2><p className="mt-2 text-sm leading-relaxed text-[#756878]">{text}</p></div>;
+}
+
+function UnavailableOption({ text }: { text: string }) {
+  return <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">{text}</p>;
 }
 
 function LargeOption({ active, onClick, title, icon }: { active: boolean; onClick: () => void; title: string; icon?: React.ReactNode }) {

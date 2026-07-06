@@ -60,7 +60,6 @@ export interface StoreSettings {
   businessHours: Record<WeekdayKey, BusinessHour>;
   delivery: {
     fee: number;
-    note: string;
   };
   payments: {
     accepted: Record<PaymentMethod, boolean>;
@@ -105,6 +104,7 @@ export interface Order {
   updatedAt: string;
   origin: OrderOrigin;
   deliveryType: DeliveryType;
+  deliveryFee?: number;
   address?: string;
   publicCode?: string;
 }

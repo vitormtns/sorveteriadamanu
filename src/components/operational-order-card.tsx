@@ -7,6 +7,7 @@ import { OrderStatusBadge, PaymentStatusBadge } from "@/components/status-badge"
 import { Button, Card } from "@/components/ui";
 import { Order } from "@/lib/types";
 import { formatCurrency, formatTime } from "@/lib/utils";
+import { paymentLabels } from "@/lib/settings";
 
 type ActionFocus = "operation" | "payment" | "all";
 type QueueContext = "default" | "prepare" | "deliver" | "collect";
@@ -14,7 +15,7 @@ type QueueContext = "default" | "prepare" | "deliver" | "collect";
 const nextAction = {
   new: { label: "Iniciar preparo", shortLabel: "Iniciar", status: "preparing" as const, icon: ChefHat },
   preparing: { label: "Marcar pronto", shortLabel: "Pronto", status: "ready" as const, icon: CheckCircle2 },
-  ready: { label: "Finalizar entrega", shortLabel: "Finalizar", status: "delivered" as const, icon: ArrowRight },
+  ready: { label: "Finalizar pedido", shortLabel: "Finalizar", status: "delivered" as const, icon: ArrowRight },
 };
 
 export function OperationalOrderCard({ order, focus = "all", compact = false, context = "default" }: { order: Order; focus?: ActionFocus; compact?: boolean; context?: QueueContext }) {
@@ -26,6 +27,9 @@ export function OperationalOrderCard({ order, focus = "all", compact = false, co
   const delivery = order.deliveryType === "delivery" ? "Entrega" : "Retirada";
   const showPayment = order.paymentStatus === "pending" && (focus === "payment" || focus === "all");
   const showOperation = action && (focus === "operation" || focus === "all");
+  const actionLabel = order.orderStatus === "ready"
+    ? order.deliveryType === "delivery" ? "Finalizar entrega" : "Finalizar retirada"
+    : action?.label;
 
   return (
     <Card className={`internal-order-card min-w-0 ${compact ? "p-4 pl-5" : "p-4 pl-5 md:p-5 md:pl-6"}`}>
@@ -48,7 +52,7 @@ export function OperationalOrderCard({ order, focus = "all", compact = false, co
       )}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <span className="text-xs text-[var(--muted)]">{formatTime(order.createdAt)}</span>
-        <span className={`text-xs font-semibold ${context === "collect" ? "rounded-md bg-amber-50 px-2 py-1 text-amber-800" : "text-[var(--muted)]"}`}>{context === "collect" ? order.paymentMethod : `· ${order.paymentMethod}`}</span>
+        <span className={`text-xs font-semibold ${context === "collect" ? "rounded-md bg-amber-50 px-2 py-1 text-amber-800" : "text-[var(--muted)]"}`}>{context === "collect" ? paymentLabels[order.paymentMethod] : `· ${paymentLabels[order.paymentMethod]}`}</span>
         <PaymentStatusBadge status={order.paymentStatus} />
         <OrderStatusBadge status={order.orderStatus} />
       </div>
@@ -62,7 +66,7 @@ export function OperationalOrderCard({ order, focus = "all", compact = false, co
           )}
           {showOperation && (
             <Button variant={showPayment ? "secondary" : "primary"} className="min-h-11 min-w-0 px-3" onClick={() => updateOrder(order.id, { orderStatus: action.status })}>
-              <action.icon size={17} /> <span className="sm:hidden">{action.shortLabel}</span><span className="hidden sm:inline">{action.label}</span>
+              <action.icon size={17} /> <span className="sm:hidden">{action.shortLabel}</span><span className="hidden sm:inline">{actionLabel}</span>
             </Button>
           )}
           <Link href={`/pedidos/${order.id}`} className={`min-w-0 ${showPayment && showOperation ? "min-[390px]:col-span-2" : !showPayment && !showOperation ? "min-[390px]:col-span-2" : ""}`}>

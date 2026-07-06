@@ -11,6 +11,7 @@ interface StoreContextValue {
   products: Product[];
   orders: Order[];
   settings: StoreSettings;
+  settingsSaveError: boolean;
   ready: boolean;
   saveProduct: (product: Omit<Product, "id" | "createdAt" | "updatedAt"> & { id?: string }) => void;
   deleteProduct: (id: string) => void;
@@ -50,27 +51,64 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [settings, setSettings] = useState<StoreSettings>(initialSettings);
+  const [settingsSaveError, setSettingsSaveError] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const savedProducts = localStorage.getItem("manu-products");
-    const savedOrders = localStorage.getItem("manu-orders");
-    const savedSettings = localStorage.getItem("manu-settings");
     /* eslint-disable react-hooks/set-state-in-effect */
     try {
+      const savedProducts = localStorage.getItem("manu-products");
       if (savedProducts) setProducts((JSON.parse(savedProducts) as Product[]).map(normalizeProduct));
+    } catch { /* Mantém os produtos iniciais se estes dados estiverem corrompidos. */ }
+    try {
+      const savedOrders = localStorage.getItem("manu-orders");
       if (savedOrders) setOrders((JSON.parse(savedOrders) as Order[]).map(normalizeOrder));
+    } catch { /* Mantém os pedidos iniciais se estes dados estiverem corrompidos. */ }
+    try {
+      const savedSettings = localStorage.getItem("manu-settings");
       if (savedSettings) setSettings(normalizeSettings(JSON.parse(savedSettings)));
-    } catch {
-      // Mantém os dados iniciais se o armazenamento local estiver corrompido.
-    }
+    } catch { /* Mantém as configurações iniciais se estes dados estiverem corrompidos. */ }
     setReady(true);
     /* eslint-enable react-hooks/set-state-in-effect */
+
+    const syncStorage = (event: StorageEvent) => {
+      try {
+        if (event.key === "manu-products" && event.newValue) {
+          setProducts((JSON.parse(event.newValue) as Product[]).map(normalizeProduct));
+        }
+        if (event.key === "manu-orders" && event.newValue) {
+          setOrders((JSON.parse(event.newValue) as Order[]).map(normalizeOrder));
+        }
+        if (event.key === "manu-settings" && event.newValue) {
+          setSettings(normalizeSettings(JSON.parse(event.newValue)));
+        }
+      } catch {
+        // Ignora apenas a atualização externa inválida e preserva o estado atual.
+      }
+    };
+    window.addEventListener("storage", syncStorage);
+    return () => window.removeEventListener("storage", syncStorage);
   }, []);
 
-  useEffect(() => { if (ready) localStorage.setItem("manu-products", JSON.stringify(products)); }, [products, ready]);
-  useEffect(() => { if (ready) localStorage.setItem("manu-orders", JSON.stringify(orders)); }, [orders, ready]);
-  useEffect(() => { if (ready) localStorage.setItem("manu-settings", JSON.stringify(settings)); }, [settings, ready]);
+  useEffect(() => {
+    if (!ready) return;
+    try { localStorage.setItem("manu-products", JSON.stringify(products)); } catch { /* Preserva o estado em memória. */ }
+  }, [products, ready]);
+  useEffect(() => {
+    if (!ready) return;
+    try { localStorage.setItem("manu-orders", JSON.stringify(orders)); } catch { /* Preserva o estado em memória. */ }
+  }, [orders, ready]);
+  useEffect(() => {
+    if (!ready) return;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    try {
+      localStorage.setItem("manu-settings", JSON.stringify(settings));
+      setSettingsSaveError(false);
+    } catch {
+      setSettingsSaveError(true);
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [settings, ready]);
 
   const saveProduct: StoreContextValue["saveProduct"] = (input) => {
     const now = new Date().toISOString();
@@ -112,7 +150,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return normalizeOrder({ ...order, ...translatedPatch, updatedAt: new Date().toISOString() });
     }));
 
-  return <StoreContext.Provider value={{ products, orders, settings, ready, saveProduct, deleteProduct, updateSettings, addOrder, updateOrder, refreshOrders }}>{children}</StoreContext.Provider>;
+  return <StoreContext.Provider value={{ products, orders, settings, settingsSaveError, ready, saveProduct, deleteProduct, updateSettings, addOrder, updateOrder, refreshOrders }}>{children}</StoreContext.Provider>;
 }
 
 export function useStore() {
