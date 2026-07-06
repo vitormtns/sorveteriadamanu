@@ -2,22 +2,34 @@
 
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { initialOrders, initialProducts } from "@/lib/mock-data";
-import { LegacyOrderStatus, NewOrder, Order, Product } from "@/lib/types";
+import { LegacyOrderStatus, NewOrder, Order, Product, StoreSettings } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { createPublicOrderCode } from "@/lib/order-code";
+import { initialSettings, normalizeSettings } from "@/lib/settings";
 
 interface StoreContextValue {
   products: Product[];
   orders: Order[];
+  settings: StoreSettings;
   ready: boolean;
   saveProduct: (product: Omit<Product, "id" | "createdAt" | "updatedAt"> & { id?: string }) => void;
   deleteProduct: (id: string) => void;
+  updateSettings: (update: Partial<StoreSettings> | ((current: StoreSettings) => StoreSettings)) => void;
   addOrder: (order: NewOrder) => string;
   updateOrder: (id: string, patch: Partial<Order>) => void;
   refreshOrders: () => void;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
+
+function normalizeProduct(product: Product): Product {
+  return {
+    ...product,
+    availableToday: product.availableToday ?? true,
+    featured: product.featured ?? false,
+    displayOrder: product.displayOrder ?? 0,
+  };
+}
 
 function normalizeOrder(order: Partial<Order> & Pick<Order, "id" | "customerName" | "items" | "paymentMethod" | "total" | "createdAt" | "updatedAt">): Order {
   const legacyStatus = order.status as LegacyOrderStatus | undefined;
@@ -37,15 +49,18 @@ function normalizeOrder(order: Partial<Order> & Pick<Order, "id" | "customerName
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [orders, setOrders] = useState<Order[]>(initialOrders);
+  const [settings, setSettings] = useState<StoreSettings>(initialSettings);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const savedProducts = localStorage.getItem("manu-products");
     const savedOrders = localStorage.getItem("manu-orders");
+    const savedSettings = localStorage.getItem("manu-settings");
     /* eslint-disable react-hooks/set-state-in-effect */
     try {
-      if (savedProducts) setProducts(JSON.parse(savedProducts));
+      if (savedProducts) setProducts((JSON.parse(savedProducts) as Product[]).map(normalizeProduct));
       if (savedOrders) setOrders((JSON.parse(savedOrders) as Order[]).map(normalizeOrder));
+      if (savedSettings) setSettings(normalizeSettings(JSON.parse(savedSettings)));
     } catch {
       // Mantém os dados iniciais se o armazenamento local estiver corrompido.
     }
@@ -55,6 +70,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { if (ready) localStorage.setItem("manu-products", JSON.stringify(products)); }, [products, ready]);
   useEffect(() => { if (ready) localStorage.setItem("manu-orders", JSON.stringify(orders)); }, [orders, ready]);
+  useEffect(() => { if (ready) localStorage.setItem("manu-settings", JSON.stringify(settings)); }, [settings, ready]);
 
   const saveProduct: StoreContextValue["saveProduct"] = (input) => {
     const now = new Date().toISOString();
@@ -66,6 +82,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteProduct = (id: string) => setProducts((current) => current.filter((item) => item.id !== id));
+  const updateSettings: StoreContextValue["updateSettings"] = (update) =>
+    setSettings((current) => normalizeSettings(typeof update === "function" ? update(current) : { ...current, ...update }));
 
   const refreshOrders = () => {
     try {
@@ -94,7 +112,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return normalizeOrder({ ...order, ...translatedPatch, updatedAt: new Date().toISOString() });
     }));
 
-  return <StoreContext.Provider value={{ products, orders, ready, saveProduct, deleteProduct, addOrder, updateOrder, refreshOrders }}>{children}</StoreContext.Provider>;
+  return <StoreContext.Provider value={{ products, orders, settings, ready, saveProduct, deleteProduct, updateSettings, addOrder, updateOrder, refreshOrders }}>{children}</StoreContext.Provider>;
 }
 
 export function useStore() {
