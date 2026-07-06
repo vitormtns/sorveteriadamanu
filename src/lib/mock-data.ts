@@ -13,6 +13,10 @@ export const initialProducts: Product[] = [
   { id: "p4", name: "Casquinha", category: "Sorvetes", price: 8, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
   { id: "p5", name: "Taça especial", category: "Sobremesas", price: 16, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
   { id: "p6", name: "Combo Manu", category: "Promoções", price: 25, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p7", name: "Milk-shake 300 ml", category: "Milk-shakes", price: 12, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p8", name: "Milk-shake 500 ml", category: "Milk-shakes", price: 17, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p9", name: "Milk-shake de Ovomaltine", category: "Milk-shakes", price: 19, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
+  { id: "p10", name: "Milk-shake de Morango", category: "Milk-shakes", price: 17, active: true, createdAt: at(8, 0), updatedAt: at(8, 0) },
 ];
 
 export const initialOrders: Order[] = [

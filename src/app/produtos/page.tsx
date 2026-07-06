@@ -7,7 +7,7 @@ import { Button, Card, Field, Input, Select } from "@/components/ui";
 import { Product, ProductCategory } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 
-const categories: ProductCategory[] = ["Açaí", "Sorvetes", "Sobremesas", "Promoções", "Bebidas", "Outros"];
+const categories: ProductCategory[] = ["Açaí", "Sorvetes", "Milk-shakes", "Sobremesas", "Promoções", "Bebidas", "Outros"];
 
 export default function ProductsPage() {
   const { products, saveProduct, deleteProduct } = useStore();
