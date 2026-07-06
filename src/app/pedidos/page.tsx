@@ -113,8 +113,8 @@ function ClosingSummary({ orders }: { orders: Order[] }) {
     <section id="fechamento" className="scroll-mt-24">
       <div className="mb-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
         <div><h2 className="text-xl font-extrabold text-[var(--text)]">Fechamento do dia</h2><p className="text-sm text-[var(--muted)]">Conferência financeira e operacional de {formatDate(selectedDate)}.</p></div>
-        <div className="flex gap-2">
-          <label className="relative block">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
+          <label className="relative block min-w-0">
             <CalendarDays className="pointer-events-none absolute left-3 top-3.5 text-slate-400" size={17} />
             <Input aria-label="Data do fechamento" type="date" value={date} onChange={(event) => setDate(event.target.value)} className="min-h-11 pl-10 text-sm" />
           </label>
@@ -191,13 +191,13 @@ function OrdersView({ queue }: { queue: Queue | null }) {
     <div className="grid gap-8">
       <section>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
-          <div><h2 className="text-xl font-extrabold text-[var(--text)]">{copy.title}</h2><p className="text-sm text-[var(--muted)]">{copy.subtitle} <span className="whitespace-nowrap">· {visible.length} {visible.length === 1 ? "pedido" : "pedidos"}</span></p></div>
+          <div><h2 className="text-xl font-extrabold text-[var(--text)]">{copy.title}</h2><p className="text-sm text-[var(--muted)]">{copy.subtitle} <span>· {visible.length} {visible.length === 1 ? "pedido" : "pedidos"}</span></p></div>
           <Link href="/pedidos/novo" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--yellow)] px-4 text-sm font-extrabold text-[var(--purple-dark)]">+ Novo pedido</Link>
         </div>
 
-        <nav aria-label="Filas de pedidos" className="-mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav aria-label="Filas de pedidos" className="mt-4 grid grid-cols-2 gap-2 min-[390px]:grid-cols-3 sm:grid-cols-6">
           {queueTabs.map((tab) => (
-            <Link key={tab.label} href={tab.href} aria-current={queue === tab.queue ? "page" : undefined} className={`inline-flex min-h-11 shrink-0 items-center rounded-xl border px-4 text-sm font-bold transition active:scale-[.98] ${queue === tab.queue ? "border-[var(--purple)] bg-[var(--purple)] text-white shadow-[0_6px_16px_rgba(58,10,77,.16)]" : "border-[var(--border)] bg-white text-slate-600 hover:border-[#ccb6d0] hover:text-[var(--purple)]"}`}>
+            <Link key={tab.label} href={tab.href} aria-current={queue === tab.queue ? "page" : undefined} className={`inline-flex min-h-11 min-w-0 items-center justify-center rounded-xl border px-2 text-xs font-bold transition active:scale-[.98] sm:text-sm ${queue === tab.queue ? "border-[var(--purple)] bg-[var(--purple)] text-white shadow-[0_6px_16px_rgba(58,10,77,.16)]" : "border-[var(--border)] bg-white text-slate-600 hover:border-[#ccb6d0] hover:text-[var(--purple)]"}`}>
               {tab.label}
             </Link>
           ))}
@@ -209,12 +209,12 @@ function OrdersView({ queue }: { queue: Queue | null }) {
             <Input className="pl-11" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por cliente, telefone ou número do pedido" />
           </div>
           {!queue && (
-            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <button onClick={() => setStatusFilter("all")} className={`min-h-10 shrink-0 rounded-xl border px-3 text-xs font-bold ${statusFilter === "all" ? "border-[#8e5799] bg-[#f2e9f4] text-[var(--purple)]" : "border-[var(--border)] bg-white text-slate-600"}`}>
+            <div className="grid grid-cols-2 gap-2 min-[390px]:grid-cols-3 sm:grid-cols-5">
+              <button onClick={() => setStatusFilter("all")} className={`min-h-10 min-w-0 rounded-xl border px-2 text-xs font-bold ${statusFilter === "all" ? "border-[#8e5799] bg-[#f2e9f4] text-[var(--purple)]" : "border-[var(--border)] bg-white text-slate-600"}`}>
                 Todas as situações
               </button>
               {statusFilters.map((item) => (
-                <button key={item.id} onClick={() => setStatusFilter(item.id)} className={`min-h-10 shrink-0 rounded-xl border px-3 text-xs font-bold ${statusFilter === item.id ? "border-[#8e5799] bg-[#f2e9f4] text-[var(--purple)]" : "border-[var(--border)] bg-white text-slate-600"}`}>
+                <button key={item.id} onClick={() => setStatusFilter(item.id)} className={`min-h-10 min-w-0 rounded-xl border px-2 text-xs font-bold ${statusFilter === item.id ? "border-[#8e5799] bg-[#f2e9f4] text-[var(--purple)]" : "border-[var(--border)] bg-white text-slate-600"}`}>
                   {item.label}
                 </button>
               ))}
@@ -231,7 +231,7 @@ function OrdersView({ queue }: { queue: Queue | null }) {
             </Select>
             {datePreset === "custom" && <Input aria-label="Data escolhida" type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="min-h-11 text-sm" />}
             {datePreset === "range" && (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid min-w-0 grid-cols-1 gap-2 min-[390px]:grid-cols-2">
                 <Input aria-label="Data inicial" type="date" value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} className="min-h-11 min-w-0 text-sm" />
                 <Input aria-label="Data final" type="date" value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} className="min-h-11 min-w-0 text-sm" />
               </div>

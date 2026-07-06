@@ -12,9 +12,9 @@ type ActionFocus = "operation" | "payment" | "all";
 type QueueContext = "default" | "prepare" | "deliver" | "collect";
 
 const nextAction = {
-  new: { label: "Iniciar preparo", status: "preparing" as const, icon: ChefHat },
-  preparing: { label: "Marcar pronto", status: "ready" as const, icon: CheckCircle2 },
-  ready: { label: "Finalizar entrega", status: "delivered" as const, icon: ArrowRight },
+  new: { label: "Iniciar preparo", shortLabel: "Iniciar", status: "preparing" as const, icon: ChefHat },
+  preparing: { label: "Marcar pronto", shortLabel: "Pronto", status: "ready" as const, icon: CheckCircle2 },
+  ready: { label: "Finalizar entrega", shortLabel: "Finalizar", status: "delivered" as const, icon: ArrowRight },
 };
 
 export function OperationalOrderCard({ order, focus = "all", compact = false, context = "default" }: { order: Order; focus?: ActionFocus; compact?: boolean; context?: QueueContext }) {
@@ -54,18 +54,18 @@ export function OperationalOrderCard({ order, focus = "all", compact = false, co
       </div>
 
       {order.orderStatus !== "canceled" && (
-        <div className={`mt-3 grid gap-2 border-t border-[var(--border)] pt-3 ${showPayment && showOperation ? "grid-cols-2" : "grid-cols-[1fr_auto]"}`}>
+        <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 border-t border-[var(--border)] pt-3 min-[390px]:grid-cols-2">
           {showPayment && (
             <Button className="min-h-11 px-3" onClick={() => updateOrder(order.id, { paymentStatus: "paid" })}>
               <Banknote size={17} /> Receber
             </Button>
           )}
           {showOperation && (
-            <Button variant={showPayment ? "secondary" : "primary"} className="min-h-11 px-3" onClick={() => updateOrder(order.id, { orderStatus: action.status })}>
-              <action.icon size={17} /> {action.label}
+            <Button variant={showPayment ? "secondary" : "primary"} className="min-h-11 min-w-0 px-3" onClick={() => updateOrder(order.id, { orderStatus: action.status })}>
+              <action.icon size={17} /> <span className="sm:hidden">{action.shortLabel}</span><span className="hidden sm:inline">{action.label}</span>
             </Button>
           )}
-          <Link href={`/pedidos/${order.id}`} className={showPayment && showOperation ? "col-span-2" : ""}>
+          <Link href={`/pedidos/${order.id}`} className={`min-w-0 ${showPayment && showOperation ? "min-[390px]:col-span-2" : !showPayment && !showOperation ? "min-[390px]:col-span-2" : ""}`}>
             <Button variant="ghost" className="min-h-10 w-full px-3"><ExternalLink size={15} /> Abrir</Button>
           </Link>
         </div>

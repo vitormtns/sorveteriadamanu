@@ -73,7 +73,7 @@ export default function OrderDetailPage() {
       {!isCanceled && (
         <Card className="p-4 md:p-5">
           <h3 className="font-extrabold">Ações rápidas</h3>
-          <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4">
             {order.paymentStatus === "pending" && <Button onClick={() => updateOrder(id, { paymentStatus: "paid" })}><Banknote size={17} /> Marcar como pago</Button>}
             {order.orderStatus === "new" && <Button variant="secondary" onClick={() => updateOrder(id, { orderStatus: "preparing" })}><ChefHat size={17} /> Iniciar preparo</Button>}
             {order.orderStatus === "preparing" && <Button variant="secondary" onClick={() => updateOrder(id, { orderStatus: "ready" })}><CheckCircle2 size={17} /> Marcar pronto</Button>}

@@ -26,7 +26,7 @@ function TaskSection({
   href: string;
 }) {
   return (
-    <section>
+    <section className="min-w-0">
       <div className="mb-3 flex items-end justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#f2e9f4] text-[var(--purple)]"><Icon size={18} /></span>
@@ -76,10 +76,10 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="grid gap-7 md:gap-9">
-      <section className="rounded-2xl bg-[linear-gradient(135deg,#310740,#4a0b63)] p-4 text-white shadow-[0_16px_36px_rgba(36,0,47,.14)] md:p-5">
+    <div className="grid min-w-0 gap-7 md:gap-9">
+      <section className="min-w-0 rounded-2xl bg-[linear-gradient(135deg,#310740,#4a0b63)] p-4 text-white shadow-[0_16px_36px_rgba(36,0,47,.14)] md:p-5">
         <div className="flex items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <p className="text-[11px] font-bold uppercase tracking-[.12em] text-[#f8b900]">Agora</p>
             <h2 className="mt-1 text-xl font-extrabold tracking-[-.03em]">{taskCount ? `${taskCount} ações pendentes` : "Operação em dia"}</h2>
             <p className="mt-1 text-sm text-purple-100/75">Prepare, entregue e receba sem sair desta tela.</p>
@@ -87,15 +87,15 @@ export default function Dashboard() {
           <Link href="/pedidos/novo" className="shrink-0 rounded-xl bg-[var(--yellow)] px-3 py-2.5 text-xs font-extrabold text-[var(--purple-dark)] sm:px-4 sm:text-sm">Novo pedido</Link>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <Link href="/pedidos?fila=preparar" className="group flex min-h-[108px] flex-col rounded-xl border border-white/[.08] bg-white/[.08] p-3 transition hover:-translate-y-0.5 hover:bg-white/[.14] active:scale-[.98]">
+          <Link href="/pedidos?fila=preparar" className="group flex min-h-[108px] min-w-0 flex-col rounded-xl border border-white/[.08] bg-white/[.08] p-2.5 transition hover:-translate-y-0.5 hover:bg-white/[.14] active:scale-[.98] min-[390px]:p-3">
             <div className="flex items-center justify-between"><ChefHat size={17} className="text-pink-300" /><ArrowRight size={14} className="text-white/40 transition group-hover:translate-x-0.5 group-hover:text-white" /></div>
             <strong className="mt-2 block text-xl">{toPrepare.length}</strong><span className="text-[10px] font-semibold text-purple-100/80">Para preparar</span><span className="mt-auto text-[9px] text-purple-100/50">Abrir fila</span>
           </Link>
-          <Link href="/pedidos?fila=entregar" className="group flex min-h-[108px] flex-col rounded-xl border border-white/[.08] bg-white/[.08] p-3 transition hover:-translate-y-0.5 hover:bg-white/[.14] active:scale-[.98]">
+          <Link href="/pedidos?fila=entregar" className="group flex min-h-[108px] min-w-0 flex-col rounded-xl border border-white/[.08] bg-white/[.08] p-2.5 transition hover:-translate-y-0.5 hover:bg-white/[.14] active:scale-[.98] min-[390px]:p-3">
             <div className="flex items-center justify-between"><PackageCheck size={17} className="text-[#f8b900]" /><ArrowRight size={14} className="text-white/40 transition group-hover:translate-x-0.5 group-hover:text-white" /></div>
             <strong className="mt-2 block text-xl">{readyToDeliver.length}</strong><span className="text-[10px] font-semibold text-purple-100/80">Para entregar</span><span className="mt-auto text-[9px] text-purple-100/50">Abrir fila</span>
           </Link>
-          <Link href="/pedidos?fila=cobrar" className="group flex min-h-[108px] flex-col rounded-xl border border-white/[.08] bg-white/[.08] p-3 transition hover:-translate-y-0.5 hover:bg-white/[.14] active:scale-[.98]">
+          <Link href="/pedidos?fila=cobrar" className="group flex min-h-[108px] min-w-0 flex-col rounded-xl border border-white/[.08] bg-white/[.08] p-2.5 transition hover:-translate-y-0.5 hover:bg-white/[.14] active:scale-[.98] min-[390px]:p-3">
             <div className="flex items-center justify-between"><Banknote size={17} className="text-emerald-300" /><ArrowRight size={14} className="text-white/40 transition group-hover:translate-x-0.5 group-hover:text-white" /></div>
             <strong className="mt-2 block text-xl">{toCollect.length}</strong><span className="text-[10px] font-semibold text-purple-100/80">Para cobrar</span><span className="mt-auto text-[9px] text-purple-100/50">Abrir fila</span>
           </Link>
@@ -130,7 +130,7 @@ export default function Dashboard() {
         href="/pedidos?fila=cobrar"
       />
 
-      <section>
+      <section className="min-w-0">
         <div className="mb-3 flex items-end justify-between">
           <div><h2 className="text-lg font-extrabold text-[var(--text)]">Resumo de hoje</h2><p className="text-xs text-[var(--muted)]">Valores dos pedidos criados hoje</p></div>
           <Link href="/pedidos#fechamento" className="text-xs font-bold text-[var(--purple)]">Ver fechamento</Link>
