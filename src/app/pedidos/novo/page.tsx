@@ -22,6 +22,7 @@ import { useStore } from "@/components/store-provider";
 import { Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
 import { PaymentMethod, PaymentStatus, Product } from "@/lib/types";
 import { formatCurrency, uid } from "@/lib/utils";
+import { formatPhone, isValidPhone } from "@/lib/phone";
 
 type Kind = "acai" | "icecream" | "milkshake" | "promo" | "product";
 type Phase = "build" | "checkout";
@@ -84,6 +85,7 @@ export default function NewOrderPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderId, setOrderId] = useState("");
   const [message, setMessage] = useState("");
+  const [validationError, setValidationError] = useState("");
 
   const [acaiSize, setAcaiSize] = useState("");
   const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
@@ -197,6 +199,10 @@ export default function NewOrderPage() {
       setPhase("build");
       return;
     }
+    if (phone.trim() && !isValidPhone(phone)) {
+      setValidationError("Informe um telefone válido com DDD.");
+      return;
+    }
     const id = addOrder({
       customerName: customerName.trim() || "Cliente balcão",
       phone: phone.trim() || undefined,
@@ -230,7 +236,13 @@ export default function NewOrderPage() {
     setPaymentMethod("Pix");
     setPaymentStatus("paid");
     setMessage("");
+    setValidationError("");
     resetBuilder();
+  }
+
+  function goToCheckout() {
+    setValidationError("");
+    setPhase("checkout");
   }
 
   if (orderId) return <Success orderId={orderId} startAgain={startAgain} />;
@@ -322,7 +334,7 @@ export default function NewOrderPage() {
               customerName={customerName}
               setCustomerName={setCustomerName}
               phone={phone}
-              setPhone={setPhone}
+              setPhone={(value) => { setPhone(value); setValidationError(""); }}
               notes={notes}
               setNotes={setNotes}
               paymentMethod={paymentMethod}
@@ -333,7 +345,8 @@ export default function NewOrderPage() {
               total={total}
               updateQuantity={updateQuantity}
               remove={(id) => setCart((current) => current.filter((item) => item.id !== id))}
-              addMore={() => setPhase("build")}
+              addMore={() => { setValidationError(""); setPhase("build"); }}
+              error={validationError}
             />
           )}
         </main>
@@ -341,7 +354,7 @@ export default function NewOrderPage() {
         <aside className="hidden min-w-0 lg:block">
           <div className="sticky top-24 grid gap-3">
             <CartCard cart={cart} total={total} updateQuantity={updateQuantity} remove={(id) => setCart((current) => current.filter((item) => item.id !== id))} />
-            <Button disabled={!cart.length} onClick={() => phase === "build" ? setPhase("checkout") : saveOrder()} className="min-h-14 w-full text-base">
+            <Button disabled={!cart.length} onClick={() => phase === "build" ? goToCheckout() : saveOrder()} className="min-h-14 w-full text-base">
               {phase === "build" ? <>Finalizar pedido <ChevronRight size={19} /></> : <><Check size={19} /> Salvar pedido</>}
             </Button>
             {phase === "checkout" && <Button variant="ghost" onClick={() => setPhase("build")}>Adicionar outro item</Button>}
@@ -354,7 +367,7 @@ export default function NewOrderPage() {
       <div className="fixed inset-x-4 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-30 lg:hidden">
         <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-white/10 bg-[#21062f]/95 p-2.5 pl-4 text-white shadow-[0_14px_35px_rgba(33,6,47,.24)] backdrop-blur-xl">
           <div className="min-w-0 flex-1"><span className="block text-[9px] font-bold uppercase tracking-wider text-purple-200/65">{cart.length} {cart.length === 1 ? "item" : "itens"}</span><strong className="block truncate text-base">{formatCurrency(total)}</strong></div>
-          <button disabled={!cart.length} onClick={() => phase === "build" ? setPhase("checkout") : saveOrder()} className="inline-flex min-h-12 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[var(--yellow)] px-4 text-sm font-extrabold text-[var(--purple-dark)] disabled:opacity-40">
+          <button disabled={!cart.length} onClick={() => phase === "build" ? goToCheckout() : saveOrder()} className="inline-flex min-h-12 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[var(--yellow)] px-4 text-sm font-extrabold text-[var(--purple-dark)] disabled:opacity-40">
             {phase === "build" ? <>Finalizar <ChevronRight size={18} /></> : <><Check size={18} /> Salvar</>}
           </button>
         </div>
@@ -401,8 +414,8 @@ function CartCard({ cart, total, updateQuantity, remove }: { cart: CartItem[]; t
   return <Card className="min-w-0 p-4"><div className="flex items-center justify-between gap-2"><h3 className="flex items-center gap-2 font-extrabold"><ShoppingCart size={18} /> Pedido atual</h3><span className="text-xs font-bold text-[var(--muted)]">{cart.length} {cart.length === 1 ? "item" : "itens"}</span></div>{cart.length ? <div className="mt-3 grid gap-2">{cart.map((item) => <div key={item.id} className="min-w-0 rounded-xl bg-[#faf5f9] p-3"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><strong className="block truncate text-sm">{item.name}</strong><p className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-[var(--muted)]">{item.detail}</p></div><button onClick={() => remove(item.id)} aria-label={`Remover ${item.name}`} className="shrink-0 text-[#a44b70]"><Trash2 size={16} /></button></div><div className="mt-2 flex items-center justify-between"><div className="flex items-center gap-3"><button onClick={() => updateQuantity(item.id, -1)} aria-label="Diminuir quantidade" className="grid h-8 w-8 place-items-center rounded-lg bg-white"><Minus size={14} /></button><strong className="text-sm">{item.quantity}</strong><button onClick={() => updateQuantity(item.id, 1)} aria-label="Aumentar quantidade" className="grid h-8 w-8 place-items-center rounded-lg bg-white"><Plus size={14} /></button></div><strong className="text-sm">{formatCurrency(item.price * item.quantity)}</strong></div></div>)}</div> : <p className="mt-3 rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-500">Nenhum item adicionado.</p>}<div className="mt-4 flex items-center justify-between border-t border-[var(--border)] pt-4"><span className="font-bold">Total</span><strong className="text-xl text-[var(--purple)]">{formatCurrency(total)}</strong></div></Card>;
 }
 
-function Checkout({ customerName, setCustomerName, phone, setPhone, notes, setNotes, paymentMethod, setPaymentMethod, paymentStatus, setPaymentStatus, cart, total, updateQuantity, remove, addMore }: { customerName: string; setCustomerName: (value: string) => void; phone: string; setPhone: (value: string) => void; notes: string; setNotes: (value: string) => void; paymentMethod: PaymentMethod; setPaymentMethod: (value: PaymentMethod) => void; paymentStatus: PaymentStatus; setPaymentStatus: (value: PaymentStatus) => void; cart: CartItem[]; total: number; updateQuantity: (id: string, amount: number) => void; remove: (id: string) => void; addMore: () => void }) {
-  return <div className="grid gap-5"><div className="lg:hidden"><CartCard cart={cart} total={total} updateQuantity={updateQuantity} remove={remove} /><Button variant="ghost" onClick={addMore} className="mt-2 w-full"><Plus size={17} /> Adicionar outro item</Button></div><Card className="grid gap-5 p-4 md:p-5"><div><h3 className="flex items-center gap-2 text-lg font-extrabold"><UserRound size={19} /> Cliente</h3><p className="mt-1 text-xs text-[var(--muted)]">Se deixar vazio, salvaremos como Cliente balcão.</p></div><div className="grid gap-3 sm:grid-cols-2"><Field label="Nome do cliente"><Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Cliente balcão" /></Field><Field label="Telefone (opcional)"><Input value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" placeholder="(00) 00000-0000" /></Field></div><div className="rounded-xl bg-[#f5ecf6] p-3 text-xs font-bold text-[#6d2779]">Origem: balcão · Tipo: retirada</div></Card><Card className="grid gap-5 p-4 md:p-5"><div><h3 className="flex items-center gap-2 text-lg font-extrabold"><CreditCard size={19} /> Pagamento</h3><p className="mt-1 text-xs text-[var(--muted)]">Informe como o pedido será recebido.</p></div><Field label="Forma de pagamento"><Select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option>Fiado/Outro</option></Select></Field><div><p className="mb-2 text-sm font-bold text-slate-700">Status do pagamento</p><div className="grid grid-cols-2 gap-2"><button onClick={() => setPaymentStatus("paid")} className={`min-h-12 rounded-xl border text-sm font-bold ${paymentStatus === "paid" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-[var(--border)] bg-white text-slate-600"}`}>Pago</button><button onClick={() => setPaymentStatus("pending")} className={`min-h-12 rounded-xl border text-sm font-bold ${paymentStatus === "pending" ? "border-amber-500 bg-amber-50 text-amber-700" : "border-[var(--border)] bg-white text-slate-600"}`}>Pendente</button></div></div><Field label="Observações gerais (opcional)"><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Ex.: troco para R$ 50, retirar mais tarde" /></Field></Card></div>;
+function Checkout({ customerName, setCustomerName, phone, setPhone, notes, setNotes, paymentMethod, setPaymentMethod, paymentStatus, setPaymentStatus, cart, total, updateQuantity, remove, addMore, error }: { customerName: string; setCustomerName: (value: string) => void; phone: string; setPhone: (value: string) => void; notes: string; setNotes: (value: string) => void; paymentMethod: PaymentMethod; setPaymentMethod: (value: PaymentMethod) => void; paymentStatus: PaymentStatus; setPaymentStatus: (value: PaymentStatus) => void; cart: CartItem[]; total: number; updateQuantity: (id: string, amount: number) => void; remove: (id: string) => void; addMore: () => void; error: string }) {
+  return <div className="grid gap-5"><div className="lg:hidden"><CartCard cart={cart} total={total} updateQuantity={updateQuantity} remove={remove} /><Button variant="ghost" onClick={addMore} className="mt-2 w-full"><Plus size={17} /> Adicionar outro item</Button></div><Card className="grid gap-5 p-4 md:p-5"><div><h3 className="flex items-center gap-2 text-lg font-extrabold"><UserRound size={19} /> Cliente</h3><p className="mt-1 text-xs text-[var(--muted)]">Se deixar vazio, salvaremos como Cliente balcão.</p></div><div className="grid gap-3 sm:grid-cols-2"><Field label="Nome do cliente"><Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Cliente balcão" /></Field><Field label="Telefone (opcional)"><Input type="tel" value={phone} onChange={(event) => setPhone(formatPhone(event.target.value))} inputMode="numeric" autoComplete="tel" maxLength={15} placeholder="(00) 00000-0000" /></Field></div>{error && <p role="alert" className="rounded-xl bg-red-50 px-3 py-2.5 text-sm font-bold text-red-700">{error}</p>}<div className="rounded-xl bg-[#f5ecf6] p-3 text-xs font-bold text-[#6d2779]">Origem: balcão · Tipo: retirada</div></Card><Card className="grid gap-5 p-4 md:p-5"><div><h3 className="flex items-center gap-2 text-lg font-extrabold"><CreditCard size={19} /> Pagamento</h3><p className="mt-1 text-xs text-[var(--muted)]">Informe como o pedido será recebido.</p></div><Field label="Forma de pagamento"><Select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option>Fiado/Outro</option></Select></Field><div><p className="mb-2 text-sm font-bold text-slate-700">Status do pagamento</p><div className="grid grid-cols-2 gap-2"><button onClick={() => setPaymentStatus("paid")} className={`min-h-12 rounded-xl border text-sm font-bold ${paymentStatus === "paid" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-[var(--border)] bg-white text-slate-600"}`}>Pago</button><button onClick={() => setPaymentStatus("pending")} className={`min-h-12 rounded-xl border text-sm font-bold ${paymentStatus === "pending" ? "border-amber-500 bg-amber-50 text-amber-700" : "border-[var(--border)] bg-white text-slate-600"}`}>Pendente</button></div></div><Field label="Observações gerais (opcional)"><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Ex.: troco para R$ 50, retirar mais tarde" /></Field></Card></div>;
 }
 
 function Success({ orderId, startAgain }: { orderId: string; startAgain: () => void }) {
