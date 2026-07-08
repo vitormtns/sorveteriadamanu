@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useMemo, useState } from "react";
-import { Banknote, CalendarDays, ClipboardList, Clock3, Printer, ReceiptText, Search, ShoppingBag, WalletCards } from "lucide-react";
+import { Banknote, CalendarDays, ClipboardList, Clock3, PackageCheck, Printer, ReceiptText, Search, ShoppingBag, SlidersHorizontal, Store, Truck, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useStore } from "@/components/store-provider";
@@ -11,15 +11,19 @@ import { Order } from "@/lib/types";
 import { formatCurrency, formatDate, isSameDay, toDateInput } from "@/lib/utils";
 import { paymentLabels } from "@/lib/settings";
 
-const statusFilters = [
-  { id: "new", label: "Novos" },
-  { id: "preparing", label: "Em preparo" },
-  { id: "ready", label: "Prontos" },
-  { id: "pending", label: "Pendentes de pagamento" },
-  { id: "paid", label: "Pagos" },
-] as const;
-
-type StatusFilter = "all" | (typeof statusFilters)[number]["id"];
+type DetailFilter =
+  | "all"
+  | "new"
+  | "preparing"
+  | "ready"
+  | "delivered"
+  | "payment_pending"
+  | "paid"
+  | "canceled"
+  | "ready_pickup"
+  | "ready_delivery"
+  | "collect_delivered"
+  | "collect_active";
 type DatePreset = "today" | "yesterday" | "7days" | "custom" | "range" | "all";
 type Queue = "preparar" | "entregar" | "cobrar" | "entregues" | "cancelados";
 
@@ -32,9 +36,17 @@ const queueTabs: { queue: Queue | null; label: string; href: string }[] = [
   { queue: "cancelados", label: "Cancelados", href: "/pedidos?fila=cancelados" },
 ];
 
+const primaryQueueTabs: { queue: Queue | null; label: string; href: string }[] = [
+  { queue: "preparar", label: "Preparar", href: "/pedidos?fila=preparar" },
+  { queue: "entregar", label: "Entregar", href: "/pedidos?fila=entregar" },
+  { queue: "cobrar", label: "Cobrar", href: "/pedidos?fila=cobrar" },
+  { queue: null, label: "Todos", href: "/pedidos" },
+];
+const secondaryQueueTabs = queueTabs.filter((tab) => tab.queue === "entregues");
+
 const queueCopy: Record<Queue, { title: string; subtitle: string }> = {
   preparar: { title: "Para preparar", subtitle: "Pedidos novos e em preparo." },
-  entregar: { title: "Para entregar", subtitle: "Pedidos prontos para retirada ou delivery." },
+  entregar: { title: "Para entregar", subtitle: "Pedidos prontos para retirada ou entrega." },
   cobrar: { title: "Para cobrar", subtitle: "Pedidos com pagamento pendente." },
   entregues: { title: "Entregues", subtitle: "Pedidos finalizados e entregues." },
   cancelados: { title: "Cancelados", subtitle: "Pedidos cancelados." },
@@ -67,10 +79,46 @@ function matchesPeriod(order: Order, preset: DatePreset, customDate: string, ran
   return (!start || created >= start) && (!end || created <= end);
 }
 
-function matchesStatus(order: Order, filter: StatusFilter) {
+function matchesDetailFilter(order: Order, filter: DetailFilter) {
   if (filter === "all") return true;
-  if (filter === "pending" || filter === "paid") return order.paymentStatus === filter && order.orderStatus !== "canceled";
+  if (filter === "payment_pending") return order.paymentStatus === "pending" && order.orderStatus !== "canceled";
+  if (filter === "paid") return order.paymentStatus === "paid" && order.orderStatus !== "canceled";
+  if (filter === "ready_pickup") return order.orderStatus === "ready" && order.deliveryType === "pickup";
+  if (filter === "ready_delivery") return order.orderStatus === "ready" && order.deliveryType === "delivery";
+  if (filter === "collect_delivered") return order.paymentStatus === "pending" && order.orderStatus === "delivered";
+  if (filter === "collect_active") return order.paymentStatus === "pending" && ["new", "preparing", "ready"].includes(order.orderStatus);
   return order.orderStatus === filter;
+}
+
+function detailFilterOptions(queue: Queue | null): { value: DetailFilter; label: string }[] {
+  if (queue === "preparar") return [
+    { value: "all", label: "Todos da fila" },
+    { value: "new", label: "Novos" },
+    { value: "preparing", label: "Em preparo" },
+  ];
+
+  if (queue === "entregar") return [
+    { value: "all", label: "Todos da fila" },
+    { value: "ready_pickup", label: "Prontos para retirada" },
+    { value: "ready_delivery", label: "Prontos para entrega" },
+  ];
+
+  if (queue === "cobrar") return [
+    { value: "all", label: "Todos pendentes" },
+    { value: "collect_delivered", label: "Já entregues" },
+    { value: "collect_active", label: "Ainda em preparo/prontos" },
+  ];
+
+  return [
+    { value: "all", label: "Todos os status" },
+    { value: "new", label: "Novo" },
+    { value: "preparing", label: "Em preparo" },
+    { value: "ready", label: "Pronto" },
+    { value: "delivered", label: "Entregue" },
+    { value: "payment_pending", label: "Pagamento pendente" },
+    { value: "paid", label: "Pago" },
+    { value: "canceled", label: "Cancelado" },
+  ];
 }
 
 function matchesQueue(order: Order, queue: Queue | null) {
@@ -80,6 +128,96 @@ function matchesQueue(order: Order, queue: Queue | null) {
   if (queue === "cobrar") return order.paymentStatus === "pending" && order.orderStatus !== "canceled";
   if (queue === "entregues") return order.orderStatus === "delivered";
   return order.orderStatus === "canceled";
+}
+
+function oldestOrderLabel(orders: Order[]) {
+  if (!orders.length) return "Sem pedidos";
+  const oldest = orders.reduce((selected, order) => new Date(order.createdAt) < new Date(selected.createdAt) ? order : selected, orders[0]);
+  return `#${oldest.id.slice(0, 6).toUpperCase()}`;
+}
+
+function QueueHeaderSummary({ queue, orders }: { queue: Queue | null; orders: Order[] }) {
+  const valid = orders.filter((order) => order.orderStatus !== "canceled");
+  const pendingPayment = valid.filter((order) => order.paymentStatus === "pending");
+  const total = valid.reduce((sum, order) => sum + order.total, 0);
+  const pickup = valid.filter((order) => order.deliveryType === "pickup");
+  const delivery = valid.filter((order) => order.deliveryType === "delivery");
+  const delivered = valid.filter((order) => order.orderStatus === "delivered");
+  const active = valid.filter((order) => order.orderStatus !== "delivered");
+
+  const metrics = queue === "preparar" ? [
+    { label: "Na fila", value: String(valid.length), icon: ShoppingBag },
+    { label: "Valor", value: formatCurrency(total), icon: ReceiptText },
+    { label: "A cobrar", value: String(pendingPayment.length), icon: Banknote },
+    { label: "Mais antigo", value: oldestOrderLabel(valid), icon: Clock3 },
+  ] : queue === "entregar" ? [
+    { label: "Prontos", value: String(valid.length), icon: PackageCheck },
+    { label: "Retirada", value: String(pickup.length), icon: Store },
+    { label: "Entrega", value: String(delivery.length), icon: Truck },
+    { label: "A cobrar", value: String(pendingPayment.length), icon: Banknote },
+  ] : queue === "cobrar" ? [
+    { label: "Pendentes", value: String(pendingPayment.length), icon: Banknote },
+    { label: "Valor pendente", value: formatCurrency(pendingPayment.reduce((sum, order) => sum + order.total, 0)), icon: ReceiptText },
+    { label: "Já entregues", value: String(delivered.length), icon: PackageCheck },
+    { label: "Em andamento", value: String(active.length), icon: Clock3 },
+  ] : queue === "entregues" ? [
+    { label: "Finalizados", value: String(valid.length), icon: PackageCheck },
+    { label: "Valor", value: formatCurrency(total), icon: ReceiptText },
+    { label: "A cobrar", value: String(pendingPayment.length), icon: Banknote },
+  ] : queue === "cancelados" ? [
+    { label: "Cancelados", value: String(orders.length), icon: ClipboardList },
+    { label: "Valor", value: formatCurrency(orders.reduce((sum, order) => sum + order.total, 0)), icon: ReceiptText },
+  ] : [
+    { label: "Pendências", value: String(valid.filter((order) => order.orderStatus !== "delivered" || order.paymentStatus === "pending").length), icon: ClipboardList },
+    { label: "Preparar", value: String(valid.filter((order) => order.orderStatus === "new" || order.orderStatus === "preparing").length), icon: ShoppingBag },
+    { label: "Entregar", value: String(valid.filter((order) => order.orderStatus === "ready").length), icon: Truck },
+    { label: "Cobrar", value: String(pendingPayment.length), icon: Banknote },
+  ];
+
+  return (
+    <div className="mt-2 hidden gap-2 md:grid md:grid-cols-4">
+      {metrics.map(({ label, value, icon: Icon }) => (
+        <div key={label} className="min-w-0 rounded-xl border border-white/75 bg-white/75 px-3 py-2 shadow-[0_8px_24px_rgba(36,0,47,.03)]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[10px] font-extrabold uppercase text-slate-400">{label}</span>
+            <Icon size={14} className="shrink-0 text-[var(--purple)]" />
+          </div>
+          <strong className="mt-0.5 block truncate text-sm font-extrabold text-[var(--text)]">{value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function compactQueueSummary(queue: Queue | null, orders: Order[]) {
+  const valid = orders.filter((order) => order.orderStatus !== "canceled");
+  const pendingPayment = valid.filter((order) => order.paymentStatus === "pending");
+  const pendingValue = pendingPayment.reduce((sum, order) => sum + order.total, 0);
+  const countLabel = `${valid.length} ${valid.length === 1 ? "pedido" : "pedidos"}`;
+
+  if (queue === "preparar") {
+    const news = valid.filter((order) => order.orderStatus === "new").length;
+    const preparing = valid.filter((order) => order.orderStatus === "preparing").length;
+    return `${countLabel} · ${news} ${news === 1 ? "novo" : "novos"} · ${preparing} em preparo`;
+  }
+
+  if (queue === "entregar") {
+    const pickup = valid.filter((order) => order.deliveryType === "pickup").length;
+    const delivery = valid.filter((order) => order.deliveryType === "delivery").length;
+    return `${countLabel} · ${pickup} retirada${pickup === 1 ? "" : "s"} · ${delivery} entrega${delivery === 1 ? "" : "s"}`;
+  }
+
+  if (queue === "cobrar") {
+    const delivered = valid.filter((order) => order.orderStatus === "delivered").length;
+    return `${countLabel} · ${formatCurrency(pendingValue)} pendente · ${delivered} já entregue${delivered === 1 ? "" : "s"}`;
+  }
+
+  if (queue === "entregues") return `${countLabel} concluído${valid.length === 1 ? "" : "s"} · ${pendingPayment.length} a cobrar`;
+  if (queue === "cancelados") return `${orders.length} ${orders.length === 1 ? "pedido cancelado" : "pedidos cancelados"}`;
+
+  const prepare = valid.filter((order) => order.orderStatus === "new" || order.orderStatus === "preparing").length;
+  const ready = valid.filter((order) => order.orderStatus === "ready").length;
+  return `${countLabel} · ${prepare} para preparar · ${ready} para entregar · ${formatCurrency(pendingValue)} pendente`;
 }
 
 function ClosingSummary({ orders }: { orders: Order[] }) {
@@ -164,12 +302,13 @@ function ClosingSummary({ orders }: { orders: Order[] }) {
 
 function OrdersView({ queue }: { queue: Queue | null }) {
   const { orders } = useStore();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [detailFilter, setDetailFilter] = useState<DetailFilter>("all");
   const [datePreset, setDatePreset] = useState<DatePreset>(queue ? "all" : "today");
   const [search, setSearch] = useState("");
   const [customDate, setCustomDate] = useState(toDateInput(new Date()));
   const [rangeStart, setRangeStart] = useState("");
   const [rangeEnd, setRangeEnd] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase().replace(/^#/, "");
@@ -178,51 +317,69 @@ function OrdersView({ queue }: { queue: Queue | null }) {
         const searchable = `${order.customerName} ${order.phone || ""} ${order.id}`.toLowerCase();
         return searchable.includes(term)
           && matchesQueue(order, queue)
-          && (queue ? true : matchesStatus(order, statusFilter))
+          && matchesDetailFilter(order, detailFilter)
           && matchesPeriod(order, datePreset, customDate, rangeStart, rangeEnd);
       })
-      .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-  }, [orders, search, statusFilter, datePreset, customDate, rangeStart, rangeEnd, queue]);
+      .sort((a, b) => queue ? +new Date(a.createdAt) - +new Date(b.createdAt) : +new Date(b.createdAt) - +new Date(a.createdAt));
+  }, [orders, search, detailFilter, datePreset, customDate, rangeStart, rangeEnd, queue]);
 
-  const copy = queue ? queueCopy[queue] : { title: "Central de pedidos", subtitle: "Visão geral e histórico de pedidos." };
+  const copy = queue ? queueCopy[queue] : { title: "Pedidos", subtitle: "Visão geral das pendências do dia." };
+  const compactSummary = compactQueueSummary(queue, visible);
+  const hasAdvancedFilter = Boolean(search.trim()) || datePreset !== (queue ? "all" : "today") || detailFilter !== "all";
+  const detailOptions = detailFilterOptions(queue);
   const cardFocus: "operation" | "payment" | "all" = queue === "preparar" || queue === "entregar" ? "operation" : queue === "cobrar" ? "payment" : "all";
   const cardContext: "prepare" | "deliver" | "collect" | "default" = queue === "preparar" ? "prepare" : queue === "entregar" ? "deliver" : queue === "cobrar" ? "collect" : "default";
 
   return (
-    <div className="grid gap-8">
+    <div className="grid gap-4 md:gap-6">
       <section>
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
-          <div><h2 className="text-xl font-extrabold text-[var(--text)]">{copy.title}</h2><p className="text-sm text-[var(--muted)]">{copy.subtitle} <span>· {visible.length} {visible.length === 1 ? "pedido" : "pedidos"}</span></p></div>
-          <Link href="/pedidos/novo" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--yellow)] px-4 text-sm font-extrabold text-[var(--purple-dark)]">+ Novo pedido</Link>
+        <div className="rounded-2xl border border-white/70 bg-white/60 p-2.5 shadow-[0_10px_28px_rgba(36,0,47,.035)] backdrop-blur md:p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-xl font-extrabold tracking-[-.025em] text-[var(--text)] md:text-2xl">{copy.title}</h2>
+              <p className="mt-0.5 text-xs font-semibold text-[var(--muted)] md:hidden">{compactSummary}</p>
+              <p className="mt-0.5 hidden text-sm text-[var(--muted)] md:block">{copy.subtitle} <span>· {compactSummary}</span></p>
+            </div>
+            <Link href="/pedidos/novo" className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-xl bg-[var(--yellow)] px-3 text-xs font-extrabold text-[var(--purple-dark)] shadow-[0_8px_20px_rgba(248,185,0,.16)] md:min-h-10 md:text-sm">+ Novo pedido</Link>
+          </div>
+          <QueueHeaderSummary queue={queue} orders={visible} />
         </div>
 
-        <nav aria-label="Filas de pedidos" className="mt-4 grid grid-cols-2 gap-2 min-[390px]:grid-cols-3 sm:grid-cols-6">
-          {queueTabs.map((tab) => (
-            <Link key={tab.label} href={tab.href} aria-current={queue === tab.queue ? "page" : undefined} className={`inline-flex min-h-11 min-w-0 items-center justify-center rounded-xl border px-2 text-xs font-bold transition active:scale-[.98] sm:text-sm ${queue === tab.queue ? "border-[var(--purple)] bg-[var(--purple)] text-white shadow-[0_6px_16px_rgba(58,10,77,.16)]" : "border-[var(--border)] bg-white text-slate-600 hover:border-[#ccb6d0] hover:text-[var(--purple)]"}`}>
+        <nav aria-label="Filas de pedidos" className="mt-2 grid grid-cols-4 gap-1.5 md:grid-cols-6 md:gap-2">
+          {primaryQueueTabs.map((tab) => (
+            <Link key={tab.label} href={tab.href} aria-current={queue === tab.queue ? "page" : undefined} className={`inline-flex min-h-9 min-w-0 items-center justify-center rounded-xl border px-2 text-[11px] font-bold transition active:scale-[.98] md:min-h-10 md:text-sm ${queue === tab.queue ? "border-[var(--purple)] bg-[var(--purple)] text-white shadow-[0_6px_16px_rgba(58,10,77,.16)]" : "border-[var(--border)] bg-white text-slate-600 hover:border-[#ccb6d0] hover:text-[var(--purple)]"}`}>
+              {tab.label}
+            </Link>
+          ))}
+          {secondaryQueueTabs.map((tab) => (
+            <Link key={tab.label} href={tab.href} aria-current={queue === tab.queue ? "page" : undefined} className={`hidden min-h-10 min-w-0 items-center justify-center rounded-xl border px-2 text-sm font-bold transition active:scale-[.98] md:inline-flex ${queue === tab.queue ? "border-[var(--purple)] bg-[var(--purple)] text-white shadow-[0_6px_16px_rgba(58,10,77,.16)]" : "border-[var(--border)] bg-white text-slate-600 hover:border-[#ccb6d0] hover:text-[var(--purple)]"}`}>
               {tab.label}
             </Link>
           ))}
         </nav>
+        <div className="mt-1.5 flex gap-2 md:hidden">
+          {secondaryQueueTabs.map((tab) => (
+            <Link key={tab.label} href={tab.href} aria-current={queue === tab.queue ? "page" : undefined} className={`inline-flex min-h-7 items-center rounded-lg border px-2.5 text-[10px] font-bold ${queue === tab.queue ? "border-[#8e5799] bg-[#f2e9f4] text-[var(--purple)]" : "border-transparent bg-white/60 text-slate-500"}`}>
+              {tab.label}
+            </Link>
+          ))}
+        </div>
 
-        <Card className="mt-4 grid gap-3 p-3 md:p-4">
-          <div className="relative">
-            <Search className="absolute left-4 top-3.5 text-slate-400" size={19} />
-            <Input className="pl-11" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por cliente, telefone ou número do pedido" />
+        <button type="button" onClick={() => setFiltersOpen((current) => !current)} className="mt-2 inline-flex min-h-9 w-full items-center justify-between rounded-xl border border-[var(--border)] bg-white px-3 text-xs font-extrabold text-[var(--purple)] md:hidden">
+          <span className="inline-flex items-center gap-2"><SlidersHorizontal size={15} /> Buscar pedido</span>
+          <span className="text-[10px] text-slate-500">{hasAdvancedFilter ? "Busca ativa" : filtersOpen ? "Ocultar" : "Abrir"}</span>
+        </button>
+
+        <Card className={`mt-2 gap-2 p-2.5 md:grid md:grid-cols-[minmax(240px,1fr)_180px_190px] md:items-start md:p-2.5 ${filtersOpen ? "grid" : "hidden"}`}>
+          <div className="relative min-w-0">
+            <Search className="absolute left-3 top-3 text-slate-400" size={17} />
+            <Input className="min-h-10 pl-9 text-sm md:min-h-11" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar cliente, telefone ou pedido" />
           </div>
-          {!queue && (
-            <div className="grid grid-cols-2 gap-2 min-[390px]:grid-cols-3 sm:grid-cols-5">
-              <button onClick={() => setStatusFilter("all")} className={`min-h-10 min-w-0 rounded-xl border px-2 text-xs font-bold ${statusFilter === "all" ? "border-[#8e5799] bg-[#f2e9f4] text-[var(--purple)]" : "border-[var(--border)] bg-white text-slate-600"}`}>
-                Todas as situações
-              </button>
-              {statusFilters.map((item) => (
-                <button key={item.id} onClick={() => setStatusFilter(item.id)} className={`min-h-10 min-w-0 rounded-xl border px-2 text-xs font-bold ${statusFilter === item.id ? "border-[#8e5799] bg-[#f2e9f4] text-[var(--purple)]" : "border-[var(--border)] bg-white text-slate-600"}`}>
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="grid gap-2 sm:grid-cols-[220px_1fr]">
-            <Select aria-label="Período" value={datePreset} onChange={(event) => setDatePreset(event.target.value as DatePreset)} className="min-h-11 text-sm">
+          <Select aria-label="Status detalhado" value={detailFilter} onChange={(event) => setDetailFilter(event.target.value as DetailFilter)} className="min-h-10 text-sm md:min-h-11">
+            {detailOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </Select>
+          <div className="grid gap-2 sm:grid-cols-[180px_1fr] md:col-span-3">
+            <Select aria-label="Período" value={datePreset} onChange={(event) => setDatePreset(event.target.value as DatePreset)} className="min-h-10 text-sm md:min-h-11">
               <option value="today">Hoje</option>
               <option value="yesterday">Ontem</option>
               <option value="7days">Últimos 7 dias</option>
@@ -230,18 +387,18 @@ function OrdersView({ queue }: { queue: Queue | null }) {
               <option value="range">Intervalo</option>
               <option value="all">Todos os dias</option>
             </Select>
-            {datePreset === "custom" && <Input aria-label="Data escolhida" type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="min-h-11 text-sm" />}
+            {datePreset === "custom" && <Input aria-label="Data escolhida" type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="min-h-10 text-sm md:min-h-11" />}
             {datePreset === "range" && (
               <div className="grid min-w-0 grid-cols-1 gap-2 min-[390px]:grid-cols-2">
-                <Input aria-label="Data inicial" type="date" value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} className="min-h-11 min-w-0 text-sm" />
-                <Input aria-label="Data final" type="date" value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} className="min-h-11 min-w-0 text-sm" />
+                <Input aria-label="Data inicial" type="date" value={rangeStart} onChange={(event) => setRangeStart(event.target.value)} className="min-h-10 min-w-0 text-sm md:min-h-11" />
+                <Input aria-label="Data final" type="date" value={rangeEnd} onChange={(event) => setRangeEnd(event.target.value)} className="min-h-10 min-w-0 text-sm md:min-h-11" />
               </div>
             )}
           </div>
         </Card>
 
         {visible.length ? (
-          <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          <div className="mt-2 grid gap-3 xl:grid-cols-2">
             {visible.map((order) => <OperationalOrderCard key={order.id} order={order} focus={cardFocus} context={cardContext} />)}
           </div>
         ) : (

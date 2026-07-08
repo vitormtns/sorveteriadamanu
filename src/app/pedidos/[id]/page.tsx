@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useStore } from "@/components/store-provider";
 import { Button, Card, Field, Select, Textarea } from "@/components/ui";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/status-badge";
+import { getOrderChecklist, getOrderIssues, splitOrderItemName } from "@/lib/order-operational";
 import { OrderStatus, PaymentStatus } from "@/lib/types";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { paymentLabels } from "@/lib/settings";
@@ -31,6 +32,8 @@ export default function OrderDetailPage() {
   }
 
   const isCanceled = order.orderStatus === "canceled";
+  const issues = getOrderIssues(order);
+  const checklist = getOrderChecklist(order);
 
   return (
     <div className="mx-auto grid max-w-5xl gap-4 md:gap-5">
@@ -49,7 +52,7 @@ export default function OrderDetailPage() {
           <div>
             <p className="text-xs font-bold uppercase tracking-[.1em] text-[var(--muted)]">Pedido #{order.id.slice(0, 8).toUpperCase()}</p>
             <h2 className="mt-1 text-2xl font-extrabold tracking-[-.035em] text-[var(--text)]">{order.customerName}</h2>
-            {order.phone && <a href={`tel:${order.phone}`} className="mt-1 block text-sm font-semibold text-[var(--purple)]">{order.phone}</a>}
+            {order.phone ? <a href={`tel:${order.phone}`} className="mt-1 block text-sm font-semibold text-[var(--purple)]">{order.phone}</a> : <p className="mt-1 text-sm font-bold text-amber-700">Telefone não informado</p>}
           </div>
           <div className="sm:text-right">
             <p className="font-semibold">{formatDateTime(order.createdAt)}</p>
@@ -65,11 +68,43 @@ export default function OrderDetailPage() {
             {order.deliveryType === "delivery" ? <MapPin size={17} className="text-[var(--purple)]" /> : <PackageCheck size={17} className="text-[var(--purple)]" />}
             <span><strong>Tipo:</strong> {order.deliveryType === "delivery" ? "Entrega" : "Retirada"}</span>
           </div>
-          {order.deliveryType === "delivery" && order.address && (
-            <p className="text-sm text-slate-600 sm:col-span-2"><strong>Endereço:</strong> {order.address}</p>
+          {order.deliveryType === "delivery" && (
+            <p className={`text-sm sm:col-span-2 ${order.address ? "text-slate-600" : "font-bold text-amber-800"}`}><strong>Endereço:</strong> {order.address || "Não informado"}</p>
+          )}
+          {order.deliveryType === "delivery" && (
+            <p className="text-sm text-slate-600 sm:col-span-2"><strong>Taxa de entrega:</strong> {formatCurrency(order.deliveryFee ?? 0)}</p>
           )}
         </div>
       </Card>
+
+      {(issues.length > 0 || checklist.length > 0) && (
+        <div className="grid gap-3 md:grid-cols-[1fr_1.2fr]">
+          <Card className="p-4 md:p-5">
+            <h3 className="font-extrabold">Alertas do pedido</h3>
+            {issues.length ? (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {issues.map((issue) => (
+                  <span key={issue.label} className={`rounded-lg border px-2.5 py-1.5 text-xs font-extrabold ${issue.tone === "danger" ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                    {issue.label}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-700">Informações principais conferidas.</p>
+            )}
+          </Card>
+          <Card className="p-4 md:p-5">
+            <h3 className="font-extrabold">Checklist do pedido</h3>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {checklist.map((item) => (
+                <span key={item.label} className={`rounded-lg px-2.5 py-1.5 text-xs font-bold ${item.ok ? item.tone === "neutral" ? "bg-violet-50 text-[#6d2779]" : "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
 
       {!isCanceled && (
         <Card className="p-4 md:p-5">
@@ -87,14 +122,21 @@ export default function OrderDetailPage() {
         <Card className="p-4 md:p-5">
           <h3 className="mb-3 font-extrabold">Itens do pedido</h3>
           <div className="divide-y divide-slate-100">
-            {order.items.map((item) => (
-              <div className="flex justify-between gap-3 py-3" key={item.id}>
-                <div><p className="font-semibold">{item.productName}</p><p className="text-sm text-[var(--muted)]">{item.quantity} × {formatCurrency(item.unitPrice)}</p></div>
-                <b className="font-semibold">{formatCurrency(item.quantity * item.unitPrice)}</b>
-              </div>
-            ))}
+            {order.items.map((item) => {
+              const parsed = splitOrderItemName(item.productName);
+              return (
+                <div className="flex justify-between gap-3 py-3" key={item.id}>
+                  <div className="min-w-0">
+                    <p className="font-semibold">{parsed.title}</p>
+                    {parsed.details.length > 0 && <p className="mt-1 text-xs leading-relaxed text-slate-500">{parsed.details.join(" · ")}</p>}
+                    <p className="mt-1 text-sm text-[var(--muted)]">{item.quantity} × {formatCurrency(item.unitPrice)}</p>
+                  </div>
+                  <b className="shrink-0 font-semibold">{formatCurrency(item.quantity * item.unitPrice)}</b>
+                </div>
+              );
+            })}
           </div>
-          {!!order.deliveryFee && <div className="mt-3 flex justify-between border-t border-[var(--border)] pt-3 text-sm text-[var(--muted)]"><span>Taxa de entrega</span><strong>{formatCurrency(order.deliveryFee)}</strong></div>}
+          {order.deliveryType === "delivery" && <div className="mt-3 flex justify-between border-t border-[var(--border)] pt-3 text-sm text-[var(--muted)]"><span>Taxa de entrega</span><strong>{formatCurrency(order.deliveryFee ?? 0)}</strong></div>}
           <div className="mt-3 flex justify-between border-t border-[var(--border)] pt-4 text-xl font-extrabold"><span>Total</span><span>{formatCurrency(order.total)}</span></div>
         </Card>
 
