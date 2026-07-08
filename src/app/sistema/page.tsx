@@ -13,6 +13,7 @@ function TaskSection({
   description,
   orders,
   focus,
+  context,
   icon: Icon,
   empty,
   href,
@@ -21,6 +22,7 @@ function TaskSection({
   description: string;
   orders: Order[];
   focus: "operation" | "payment";
+  context: "prepare" | "deliver" | "collect";
   icon: typeof ChefHat;
   empty: string;
   href: string;
@@ -42,7 +44,7 @@ function TaskSection({
       </div>
       {orders.length ? (
         <div className="grid gap-3 xl:grid-cols-2">
-          {orders.slice(0, 4).map((order) => <OperationalOrderCard key={order.id} order={order} focus={focus} compact />)}
+          {orders.slice(0, 4).map((order) => <OperationalOrderCard key={order.id} order={order} focus={focus} context={context} compact />)}
         </div>
       ) : (
         <Card className="flex items-center gap-3 border-dashed px-4 py-4 text-sm text-slate-600">
@@ -107,6 +109,7 @@ export default function Dashboard() {
         description="Novos pedidos e itens em produção"
         orders={toPrepare}
         focus="operation"
+        context="prepare"
         icon={ChefHat}
         empty="Nenhum pedido aguardando preparo."
         href="/pedidos?fila=preparar"
@@ -116,6 +119,7 @@ export default function Dashboard() {
         description="Pedidos aguardando retirada ou entrega"
         orders={readyToDeliver}
         focus="operation"
+        context="deliver"
         icon={PackageCheck}
         empty="Nenhum pedido pronto aguardando entrega."
         href="/pedidos?fila=entregar"
@@ -125,6 +129,7 @@ export default function Dashboard() {
         description="Pagamentos pendentes, inclusive de outros dias"
         orders={toCollect}
         focus="payment"
+        context="collect"
         icon={Banknote}
         empty="Nenhum pagamento pendente."
         href="/pedidos?fila=cobrar"

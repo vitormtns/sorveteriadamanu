@@ -81,9 +81,9 @@ function queuePriority(order: Order, context: QueueContext) {
 
 function InfoLine({ icon: Icon, children }: { icon: typeof Store; children: React.ReactNode }) {
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 rounded-lg bg-white/70 px-2 py-1 text-[11px] font-bold text-slate-600">
+    <span className="inline-flex min-h-9 min-w-0 items-center gap-1.5 rounded-lg bg-white/70 px-2 py-1.5 text-[11px] font-bold leading-tight text-slate-600">
       <Icon size={13} className="shrink-0 text-slate-400" />
-      <span className="truncate">{children}</span>
+      <span className="min-w-0 break-words">{children}</span>
     </span>
   );
 }
@@ -134,7 +134,7 @@ export function OperationalOrderCard({
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-1.5 min-[430px]:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         <InfoLine icon={order.origin === "delivery" ? Truck : Store}>{origin}</InfoLine>
         <InfoLine icon={order.deliveryType === "delivery" ? MapPin : PackageCheck}>{delivery}</InfoLine>
         <InfoLine icon={ReceiptText}>{paymentLabels[order.paymentMethod]}</InfoLine>
