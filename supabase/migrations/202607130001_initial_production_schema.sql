@@ -24,7 +24,7 @@ returns text
 language sql
 volatile
 as $$
-  select 'M' || upper(substr(encode(gen_random_bytes(6), 'hex'), 1, 12));
+  select 'M' || upper(substr(encode(extensions.gen_random_bytes(6), 'hex'), 1, 12));
 $$;
 
 create or replace function public.ensure_order_public_code()
@@ -326,13 +326,13 @@ create or replace function public.create_internal_order(
   p_customer_name text,
   p_payment_method public.payment_method,
   p_items jsonb,
-  p_phone text default null,
-  p_notes text default null,
-  p_payment_status public.payment_status default 'pending',
-  p_delivery_type public.delivery_type default 'pickup',
-  p_address text default null,
-  p_delivery_fee numeric default 0,
-  p_discount numeric default 0
+  p_phone text,
+  p_notes text,
+  p_payment_status public.payment_status,
+  p_delivery_type public.delivery_type,
+  p_address text,
+  p_delivery_fee numeric,
+  p_discount numeric
 )
 returns uuid
 language plpgsql
@@ -533,7 +533,7 @@ begin
     (v_order.order_status = 'new' and p_new_status = 'preparing')
     or (v_order.order_status = 'preparing' and p_new_status = 'ready')
     or (v_order.order_status = 'ready' and p_new_status = 'delivered')
-    or (v_order.order_status <> 'canceled' and p_new_status = 'canceled');
+    or (v_order.order_status in ('new', 'preparing', 'ready') and p_new_status = 'canceled');
 
   if not v_allowed then
     raise exception 'Transição de status não permitida.' using errcode = '23514';
@@ -612,11 +612,36 @@ create or replace function public.cancel_order(
   p_cancellation_reason text
 )
 returns public.orders
-language sql
+language plpgsql
 security definer
 set search_path = public
 as $$
-  select public.update_order_status(p_order_id, 'canceled'::public.order_status, p_cancellation_reason);
+declare
+  v_status public.order_status;
+begin
+  if not public.is_active_user() then
+    raise exception 'Usuário sem permissão para cancelar pedidos.' using errcode = '42501';
+  end if;
+
+  select order_status
+  into v_status
+  from public.orders
+  where id = p_order_id;
+
+  if not found then
+    raise exception 'Pedido não encontrado.' using errcode = 'P0002';
+  end if;
+
+  if v_status = 'delivered' then
+    raise exception 'Pedidos entregues não podem ser cancelados pelo fluxo comum.' using errcode = '23514';
+  end if;
+
+  if v_status = 'canceled' then
+    raise exception 'Pedido já está cancelado.' using errcode = '23514';
+  end if;
+
+  return public.update_order_status(p_order_id, 'canceled'::public.order_status, p_cancellation_reason);
+end;
 $$;
 
 alter table public.profiles enable row level security;
@@ -840,3 +865,5 @@ comment on column public.orders.public_code is 'Código público aleatório, ún
 comment on table public.order_status_history is 'Histórico simples de mudanças operacionais do pedido. Não substitui Event Sourcing.';
 comment on view public.public_store_settings is 'View pública com apenas configurações seguras para o site e delivery. Não expõe chave Pix, observação interna de pagamento nem campos sensíveis futuros.';
 comment on function public.create_internal_order(text, public.payment_method, jsonb, text, text, public.payment_status, public.delivery_type, text, numeric, numeric) is 'Cria pedido interno de forma atômica. Produtos com product_id usam preço do banco; itens sem product_id são itens manuais autenticados.';
+
+notify pgrst, 'reload schema';
