@@ -64,6 +64,12 @@ export interface Database {
         Update: DatabaseFlavorUpdate;
         Relationships: [];
       };
+      delivery_builder_options: {
+        Row: DatabaseDeliveryBuilderOption;
+        Insert: DatabaseDeliveryBuilderOptionInsert;
+        Update: DatabaseDeliveryBuilderOptionUpdate;
+        Relationships: [];
+      };
     };
     Views: {
       public_store_settings: {
@@ -93,6 +99,21 @@ export interface Database {
           p_discount: PostgresNumeric;
         };
         Returns: string;
+      };
+      consume_public_order_rate_limit: {
+        Args: {
+          p_rate_key: string;
+          p_limit: number;
+          p_window_seconds: number;
+        };
+        Returns: boolean;
+      };
+      create_public_order: {
+        Args: {
+          p_idempotency_key: string;
+          p_request: Json;
+        };
+        Returns: DatabaseOrder;
       };
       current_profile_role: {
         Args: Record<string, never>;
@@ -228,15 +249,19 @@ export type DatabaseOrder = {
   ready_at: string | null;
   completed_at: string | null;
   canceled_at: string | null;
+  idempotency_key: string | null;
+  idempotency_payload_hash: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export type DatabaseOrderInsert = Omit<DatabaseOrder, "id" | "public_code" | "created_at" | "updated_at"> & {
+export type DatabaseOrderInsert = Omit<DatabaseOrder, "id" | "public_code" | "created_at" | "updated_at" | "idempotency_key" | "idempotency_payload_hash"> & {
   id?: string;
   public_code?: string;
   created_at?: string;
   updated_at?: string;
+  idempotency_key?: string | null;
+  idempotency_payload_hash?: string | null;
 };
 export type DatabaseOrderUpdate = Partial<DatabaseOrderInsert>;
 
@@ -405,3 +430,28 @@ export type DatabaseFlavorInsert = Omit<DatabaseFlavor, "id" | "created_at" | "u
   updated_at?: string;
 };
 export type DatabaseFlavorUpdate = Partial<DatabaseFlavorInsert>;
+
+export type DatabaseDeliveryBuilderType = "acai" | "ice_cream" | "milkshake";
+export type DatabaseDeliveryBuilderOptionType = "size" | "format" | "scoop" | "topping";
+
+export type DatabaseDeliveryBuilderOption = {
+  id: string;
+  builder_type: DatabaseDeliveryBuilderType;
+  option_type: DatabaseDeliveryBuilderOptionType;
+  code: string;
+  name: string;
+  price: PostgresNumeric;
+  max_flavors: number | null;
+  active: boolean;
+  available: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DatabaseDeliveryBuilderOptionInsert = Omit<DatabaseDeliveryBuilderOption, "id" | "created_at" | "updated_at"> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+export type DatabaseDeliveryBuilderOptionUpdate = Partial<DatabaseDeliveryBuilderOptionInsert>;

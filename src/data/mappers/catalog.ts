@@ -1,5 +1,5 @@
-import { ConfigurableItem, FlavorProductType, Promotion } from "@/lib/types";
-import { DatabaseAddOn, DatabaseFlavor, DatabaseFlavorProductType, DatabasePromotion, DatabasePromotionInsert, DatabasePromotionUpdate } from "@/data/supabase/database.types";
+import { ConfigurableItem, DeliveryBuilderOption, FlavorProductType, Promotion } from "@/lib/types";
+import { DatabaseAddOn, DatabaseDeliveryBuilderOption, DatabaseFlavor, DatabaseFlavorProductType, DatabasePromotion, DatabasePromotionInsert, DatabasePromotionUpdate } from "@/data/supabase/database.types";
 import { moneyToDatabase, numericToNumber } from "./numeric";
 
 export function mapPromotionFromDatabase(row: DatabasePromotion): Promotion {
@@ -76,6 +76,23 @@ export function mapFlavorFromDatabase(row: DatabaseFlavor): ConfigurableItem & {
 
 export function mapFlavorProductTypeToDatabase(value: FlavorProductType): DatabaseFlavorProductType {
   return value;
+}
+
+export function mapDeliveryBuilderOptionFromDatabase(row: DatabaseDeliveryBuilderOption): DeliveryBuilderOption {
+  return {
+    id: row.id,
+    builderType: row.builder_type,
+    optionType: row.option_type,
+    code: row.code,
+    name: row.name,
+    price: numericToNumber(row.price),
+    maxFlavors: row.max_flavors ?? undefined,
+    active: row.active,
+    available: row.available,
+    displayOrder: row.display_order,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 function mapFlavorProductTypeFromDatabase(value: DatabaseFlavorProductType): FlavorProductType {

@@ -37,11 +37,14 @@ NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anon
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 SUPABASE_SERVICE_ROLE_KEY=sua-chave-service-role
+PUBLIC_ORDER_RATE_LIMIT_SALT=um-segredo-aleatorio-longo-e-exclusivo-do-ambiente
 ```
 
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` pode ser usada no navegador e sempre passa por RLS.
 
 `SUPABASE_SERVICE_ROLE_KEY` é somente para servidor. Nunca use em Client Components, nunca envie ao navegador e nunca exponha em logs.
+
+`PUBLIC_ORDER_RATE_LIMIT_SALT` também é somente servidor. Use um valor aleatório longo, diferente em cada ambiente, para gerar chaves de rate limit sem armazenar IP ou telefone em texto puro.
 
 ## Perfis da equipe
 
@@ -74,6 +77,7 @@ O arquivo atual `src/data/supabase/database.types.ts` foi escrito para ser compa
 - `order_status_history` registra mudanças operacionais por trigger simples. Não é Event Sourcing.
 - `create_internal_order` cria pedido interno de forma atômica. Itens com `product_id` usam preço do banco; itens sem `product_id` são manuais e autenticados.
 - Endereço obrigatório para delivery será validado pela operação de servidor, não por `CHECK`, para evitar bloqueios em migrações e correções operacionais.
+- Opções e preços dos montadores do delivery ficam em `delivery_builder_options`. O navegador usa esses valores apenas para prévia; a RPC calcula novamente cada preço no banco.
 
 ## RLS
 
@@ -82,14 +86,14 @@ Todas as tabelas públicas estão com RLS ativada.
 - Público anônimo lê catálogo disponível, horários e a view `public_store_settings`.
 - Público anônimo não tem SELECT direto em `store_settings`.
 - Público anônimo não lista pedidos, não consulta clientes e não altera dados.
+- `POST /api/orders` valida o payload no servidor e chama a RPC `create_public_order` com `service_role`; anon e authenticated não recebem `EXECUTE` nessa RPC.
+- A criação pública é idempotente por `idempotency_key`. Repetições com o mesmo payload retornam o mesmo pedido; com payload diferente retornam conflito.
 - Usuários internos ativos leem dados operacionais.
 - Attendants criam pedidos internos e atualizam status/pagamento apenas por RPCs específicas.
 - Owners gerenciam produtos, configurações, promoções, adicionais e sabores. A gestão de perfis permanece apenas administrativa nesta etapa.
 
 ## Próximos passos
 
-- Criar Server Actions ou Route Handlers para criação pública de pedidos com validação de servidor.
-- Implementar `create_public_order` com validação de preços, antifraude simples e consulta por código combinada com telefone ou token público.
 - Não expor acompanhamento público só por `public_code`; use `public_code` com telefone normalizado ou token público para evitar enumeração e vazamento de telefone/endereço.
 - Conectar gradualmente as telas aos repositórios em `src/data/repositories`.
 - Adicionar testes automatizados para mappers e operações críticas quando a infraestrutura de testes for escolhida.
@@ -106,3 +110,11 @@ As rotas internas são protegidas por `src/proxy.ts`, que atualiza cookies e exi
 Supabase é a fonte de verdade para autenticação, profiles, produtos, configurações, horários, promoções, adicionais e sabores. Pedidos, acompanhamento, filas, fechamento e impressão continuam no `localStorage` nesta etapa.
 
 O salvamento da tela de configurações usa a RPC `save_store_configuration`, criada pela migration `202607140002_atomic_store_configuration.sql`, para persistir configurações, horários, promoções, adicionais e sabores em uma única transação.
+
+## Pedidos públicos
+
+O delivery usa `POST /api/orders`. A rota valida limites, origem em produção, payload e rate limit persistente por IP, telefone e chave de idempotência. Em seguida, `create_public_order` valida disponibilidade da loja, horários (inclusive atravessando meia-noite), pagamentos, catálogo, sabores, adicionais, promoções e totais dentro de uma única transação.
+
+O rate limit é uma proteção básica compatível com a infraestrutura atual; em múltiplas regiões ou alto volume, reavalie os limites e considere uma camada dedicada de borda. A tabela guarda somente hashes salgados das chaves de limitação.
+
+Em desenvolvimento sem variáveis do Supabase, o delivery continua em modo de demonstração local e identifica o pedido com um código `DEMO-...`. Esse fluxo não simula nem grava pedidos de produção.

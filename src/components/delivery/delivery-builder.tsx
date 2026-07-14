@@ -5,28 +5,23 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronLeft, CreditCard, IceCreamBowl, MapPin, MessageCircle, Minus, PackageCheck, Plus, ShoppingBag, Sparkles, Trash2, Truck, UserRound } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { useStore } from "@/components/store-provider";
-import { ConfigurableItem, PaymentMethod, Promotion, StoreSettings } from "@/lib/types";
+import { ConfigurableItem, DeliveryBuilderOption, PaymentMethod, Promotion, StoreSettings } from "@/lib/types";
 import { formatCurrency, toDateInput, uid } from "@/lib/utils";
 import { formatPhone, isValidPhone } from "@/lib/phone";
-import { createPublicOrderCode } from "@/lib/order-code";
 import { getStoreAvailability, paymentLabels } from "@/lib/settings";
+import { calculateAcaiAddOnPrice, PublicOrderItemInput, PublicOrderRequest, roundMoney } from "@/lib/public-order";
 
 type Kind = "acai" | "icecream" | "milkshake" | "promo";
-type CartItem = { id: string; productId: string; name: string; detail: string; price: number; quantity: number };
+type CartItem = { id: string; name: string; detail: string; price: number; quantity: number; request: PublicOrderItemInput };
 type Customer = { name: string; phone: string; deliveryType: "pickup" | "delivery" | ""; address: string; payment: PaymentMethod | ""; notes: string };
 type SetText = (value: string) => void;
 const freeAddOnsLabel = (quantity: number) => `${quantity} ${quantity === 1 ? "adicional grátis" : "adicionais grátis"}`;
 type CheckoutStage = "review" | "delivery" | "address" | "name" | "phone" | "payment" | "note" | "confirm";
 
-const sizes = [{ name: "300 ml", price: 14 }, { name: "500 ml", price: 19 }, { name: "700 ml", price: 25 }, { name: "1 litro", price: 34 }];
-const formats = [{ name: "Copo", price: 0 }, { name: "Casquinha", price: 0 }];
-const scoops = [{ name: "1 bola", price: 7, max: 1 }, { name: "2 bolas", price: 12, max: 2 }, { name: "3 bolas", price: 16, max: 3 }];
-const iceExtras = ["Chocolate", "Morango", "Leite condensado", "Granulado", "Sem cobertura"];
-const shakeSizes = [{ name: "300 ml", price: 12 }, { name: "500 ml", price: 17 }, { name: "700 ml", price: 22 }];
 const emptyCustomer: Customer = { name: "", phone: "", deliveryType: "", address: "", payment: "", notes: "" };
 
 export function DeliveryBuilder() {
-  const { addOrder, settings } = useStore();
+  const { addOrder, settings, deliveryBuilderOptions } = useStore();
   const [availabilityNow, setAvailabilityNow] = useState(() => new Date());
   const [kind, setKind] = useState<Kind | null>(null);
   const [step, setStep] = useState(0);
@@ -34,7 +29,9 @@ export function DeliveryBuilder() {
   const [size, setSize] = useState(""); const [selectedExtras, setSelectedExtras] = useState<string[]>([]); const [acaiNote, setAcaiNote] = useState("");
   const [format, setFormat] = useState(""); const [scoop, setScoop] = useState(""); const [selectedFlavors, setSelectedFlavors] = useState<string[]>([]); const [iceExtra, setIceExtra] = useState("");
   const [shakeSize, setShakeSize] = useState(""); const [shakeFlavor, setShakeFlavor] = useState(""); const [shakeNote, setShakeNote] = useState("");
-  const [customer, setCustomer] = useState<Customer>(emptyCustomer); const [error, setError] = useState(""); const [orderId, setOrderId] = useState("");
+  const [customer, setCustomer] = useState<Customer>(emptyCustomer); const [error, setError] = useState(""); const [orderCode, setOrderCode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [requestIdentity, setRequestIdentity] = useState<{ fingerprint: string; key: string } | null>(null);
   const building = kind === "acai" || kind === "icecream" || kind === "milkshake";
   const stepCount = kind === "icecream" ? 4 : 3;
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -45,6 +42,21 @@ export function DeliveryBuilder() {
   const extras = settings.acaiExtras.filter((item) => item.active !== false && item.available && item.name.trim());
   const flavors = settings.iceCreamFlavors.filter((item) => item.active !== false && item.available && item.name.trim());
   const shakeFlavors = settings.milkshakeFlavors.filter((item) => item.active !== false && item.available && item.name.trim());
+  const options = deliveryBuilderOptions.filter((option) => option.active && option.available);
+  const acaiSizes = options.filter((option) => option.builderType === "acai" && option.optionType === "size");
+  const iceFormats = options.filter((option) => option.builderType === "ice_cream" && option.optionType === "format");
+  const iceScoops = options.filter((option) => option.builderType === "ice_cream" && option.optionType === "scoop");
+  const iceToppings = options.filter((option) => option.builderType === "ice_cream" && option.optionType === "topping");
+  const milkshakeSizes = options.filter((option) => option.builderType === "milkshake" && option.optionType === "size");
+  const optionById = (id: string) => options.find((option) => option.id === id);
+  const selectedSize = optionById(size);
+  const selectedFormat = optionById(format);
+  const selectedScoop = optionById(scoop);
+  const selectedIceExtra = optionById(iceExtra);
+  const selectedShakeSize = optionById(shakeSize);
+  const selectedShakeFlavor = shakeFlavors.find((flavor) => flavor.id === shakeFlavor);
+  const selectedExtraItems = selectedExtras.map((id) => extras.find((item) => item.id === id)).filter((item): item is ConfigurableItem => Boolean(item)).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+  const selectedFlavorItems = selectedFlavors.map((id) => flavors.find((flavor) => flavor.id === id)).filter((item): item is ConfigurableItem => Boolean(item));
   const today = toDateInput(new Date());
   const promotions = settings.promotions.filter((promotion) =>
     promotion.active
@@ -63,29 +75,35 @@ export function DeliveryBuilder() {
     return () => window.clearInterval(timer);
   }, []);
   const itemPrice = useMemo(() => kind === "acai"
-    ? (sizes.find(x => x.name === size)?.price || 0) + selectedExtras.slice(freeAcaiExtras).reduce((sum, name) => sum + (extras.find(x => x.name === name)?.extraPrice || 0), 0)
-    : kind === "milkshake" ? (shakeSizes.find(x => x.name === shakeSize)?.price || 0)
-    : (scoops.find(x => x.name === scoop)?.price || 0) + (formats.find(x => x.name === format)?.price || 0), [kind, size, selectedExtras, scoop, format, shakeSize, extras, freeAcaiExtras]);
+    ? roundMoney((selectedSize?.price ?? 0) + calculateAcaiAddOnPrice(selectedExtraItems.map((item) => item.extraPrice ?? 0), freeAcaiExtras))
+    : kind === "milkshake" ? (selectedShakeSize?.price ?? 0)
+    : roundMoney((selectedScoop?.price ?? 0) + (selectedFormat?.price ?? 0) + (selectedIceExtra?.price ?? 0)), [kind, selectedSize, selectedExtraItems, selectedScoop, selectedFormat, selectedIceExtra, selectedShakeSize, freeAcaiExtras]);
   const reset = () => { setKind(null); setStep(0); setSize(""); setSelectedExtras([]); setAcaiNote(""); setFormat(""); setScoop(""); setSelectedFlavors([]); setIceExtra(""); setShakeSize(""); setShakeFlavor(""); setShakeNote(""); setError(""); };
-  const canAdvance = kind === "acai" ? [!!size, true, true][step] : kind === "icecream" ? [!!format, !!scoop, selectedFlavors.length > 0, !!iceExtra][step] : kind === "milkshake" ? [!!shakeSize, !!shakeFlavor, true][step] : true;
-  const selectFlavor = (name: string) => {
-    const max = scoops.find(x => x.name === scoop)?.max || 1;
-    setSelectedFlavors(current => current.includes(name) ? current.filter(x => x !== name) : current.length < max ? [...current, name] : [...current.slice(1), name]);
+  const canAdvance = kind === "acai" ? [!!size, true, true][step] : kind === "icecream" ? [!!format, !!scoop, selectedFlavors.length === (selectedScoop?.maxFlavors ?? 1), !!iceExtra][step] : kind === "milkshake" ? [!!shakeSize, !!shakeFlavor, true][step] : true;
+  const selectFlavor = (id: string) => {
+    const max = selectedScoop?.maxFlavors ?? 1;
+    setSelectedFlavors(current => current.includes(id) ? current.filter(x => x !== id) : current.length < max ? [...current, id] : [...current.slice(1), id]);
   };
   const addBuilt = () => {
     const isAcai = kind === "acai"; const isShake = kind === "milkshake";
-    const name = isAcai ? `Açaí ${size}` : isShake ? `Milk-shake ${shakeSize} — ${shakeFlavor}` : `Sorvete ${format.toLowerCase()} · ${scoop}`;
-    const included = selectedExtras.slice(0, freeAcaiExtras);
-    const paid = selectedExtras.slice(freeAcaiExtras);
+    const name = isAcai ? `Açaí ${selectedSize?.name ?? ""}` : isShake ? `Milk-shake ${selectedShakeSize?.name ?? ""} — ${selectedShakeFlavor?.name ?? ""}` : `Sorvete ${selectedFormat?.name.toLowerCase() ?? ""} · ${selectedScoop?.name ?? ""}`;
+    const included = selectedExtraItems.slice(0, freeAcaiExtras);
+    const paid = selectedExtraItems.slice(freeAcaiExtras);
     const detail = isAcai ? [
-      included.length ? `Adicionais inclusos: ${included.join(", ")}` : "Sem adicionais",
-      paid.length ? `Adicionais pagos: ${paid.join(", ")}` : "",
+      included.length ? `Adicionais inclusos: ${included.map((item) => item.name).join(", ")}` : "Sem adicionais",
+      paid.length ? `Adicionais pagos: ${paid.map((item) => item.name).join(", ")}` : "",
       acaiNote && `Observação: ${acaiNote}`,
-    ] : isShake ? [shakeNote && `Observação: ${shakeNote}`] : [...selectedFlavors, iceExtra];
-    setCart(current => [...current, { id: uid(), productId: `delivery-${kind}`, name, detail: detail.filter(Boolean).join(" · "), price: itemPrice, quantity: 1 }]);
+    ] : isShake ? [shakeNote && `Observação: ${shakeNote}`] : [...selectedFlavorItems.map((item) => item.name), selectedIceExtra?.name];
+    const request: PublicOrderItemInput = isAcai
+      ? { builderType: "acai", quantity: 1, sizeId: size, addOnIds: selectedExtras, notes: acaiNote.trim() || undefined }
+      : isShake
+        ? { builderType: "milkshake", quantity: 1, sizeId: shakeSize, flavorIds: [shakeFlavor], notes: shakeNote.trim() || undefined }
+        : { builderType: "ice_cream", quantity: 1, formatId: format, scoopId: scoop, flavorIds: selectedFlavors, toppingId: iceExtra };
+    setCart(current => [...current, { id: uid(), name, detail: detail.filter(Boolean).join(" · "), price: itemPrice, quantity: 1, request }]);
     reset();
   };
-  const submit = () => {
+  const submit = async () => {
+    if (submitting) return;
     const currentAvailability = getStoreAvailability(settings);
     const validation = !currentAvailability.acceptingOrders ? currentAvailability.message
       : !customer.deliveryType ? "Escolha como você quer receber."
@@ -100,18 +118,42 @@ export function DeliveryBuilder() {
       : !cart.length ? "Adicione pelo menos um item ao pedido."
       : subtotal < settings.delivery.minimumOrder ? `O pedido mínimo é de ${formatCurrency(settings.delivery.minimumOrder)}.` : "";
     if (validation) return setError(validation);
-    const id = addOrder({ customerName: customer.name.trim(), phone: customer.phone.trim(), items: cart.map(item => ({ id: item.id, productId: item.productId, productName: `${item.name} — ${item.detail}`, quantity: item.quantity, unitPrice: item.price })), notes: customer.notes.trim() || undefined, paymentMethod: customer.payment as PaymentMethod, paymentStatus: "pending", orderStatus: "new", status: "pending_payment", total, origin: "delivery", deliveryType: customer.deliveryType as "pickup" | "delivery", deliveryFee: customer.deliveryType === "delivery" ? deliveryFee : 0, address: customer.deliveryType === "delivery" ? customer.address.trim() : undefined });
-    setOrderId(id);
+    const request: Omit<PublicOrderRequest, "idempotencyKey"> = { customerName: customer.name.trim(), phone: customer.phone.trim(), deliveryType: customer.deliveryType as "pickup" | "delivery", address: customer.deliveryType === "delivery" ? customer.address.trim() : undefined, paymentMethod: customer.payment as PaymentMethod, notes: customer.notes.trim() || undefined, items: cart.map((item) => ({ ...item.request, quantity: item.quantity })) };
+    const fingerprint = JSON.stringify(request);
+    const idempotencyKey = requestIdentity?.fingerprint === fingerprint ? requestIdentity.key : crypto.randomUUID();
+    setRequestIdentity({ fingerprint, key: idempotencyKey });
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      if (process.env.NODE_ENV !== "development") return setError("O envio de pedidos não está configurado neste ambiente.");
+      const id = addOrder({ customerName: request.customerName, phone: request.phone, items: cart.map(item => ({ id: item.id, productName: `${item.name} — ${item.detail}`, quantity: item.quantity, unitPrice: item.price })), notes: request.notes, paymentMethod: request.paymentMethod, paymentStatus: "pending", orderStatus: "new", status: "pending_payment", total, origin: "delivery", deliveryType: request.deliveryType, deliveryFee: request.deliveryType === "delivery" ? deliveryFee : 0, address: request.address });
+      setOrderCode(`DEMO-${id.slice(-6).toUpperCase()}`);
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...request, idempotencyKey }) });
+      const result: unknown = await response.json();
+      if (!response.ok || typeof result !== "object" || result === null || !("success" in result) || result.success !== true || !("order" in result) || typeof result.order !== "object" || result.order === null || !("publicCode" in result.order) || typeof result.order.publicCode !== "string") {
+        const message = typeof result === "object" && result !== null && "error" in result && typeof result.error === "object" && result.error !== null && "message" in result.error && typeof result.error.message === "string" ? result.error.message : "Não foi possível enviar o pedido.";
+        setError(message);
+        return;
+      }
+      setOrderCode(result.order.publicCode);
+    } catch {
+      setError("Não foi possível se conectar ao servidor. Tente novamente.");
+    } finally {
+      setSubmitting(false);
+    }
   };
-  if (orderId) return <Success id={orderId} restart={() => { setOrderId(""); setCart([]); setCustomer(emptyCustomer); reset(); }} />;
+  if (orderCode) return <Success code={orderCode} restart={() => { setOrderCode(""); setCart([]); setCustomer(emptyCustomer); setRequestIdentity(null); reset(); }} />;
 
   return <main className="delivery-page min-h-screen bg-[#fbf7f0] text-[#190620]">
     <header className="sticky top-0 z-40 border-b border-[#3a0a4d]/10 bg-[#fbf7f0]/90 backdrop-blur-xl"><div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4 md:h-20 md:px-8"><div className="flex min-w-0 items-center gap-2.5"><Link href="/" aria-label="Voltar para a página inicial"><BrandLogo compact /></Link><span aria-label={availability.message} title={availability.message} className={`inline-flex min-h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[10px] font-extrabold uppercase tracking-[.08em] ${availability.acceptingOrders ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}><i className={`h-1.5 w-1.5 rounded-full ${availability.acceptingOrders ? "bg-emerald-500" : "bg-amber-500"}`} />{availability.acceptingOrders ? "Aberto" : "Pausado"}</span></div><button onClick={() => { if (cart.length) { setKind("promo"); setStep(1); } }} className="flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-[#3a0a4d] px-3.5 text-sm font-bold text-white"><ShoppingBag size={18} /> {formatCurrency(total)}{cart.length > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#f8b900] px-1 text-[11px] text-[#24002f]">{cart.length}</span>}</button></div></header>
     {!kind ? <Start choose={setKind} cart={cart} checkout={() => { setKind("promo"); setStep(1); }} availability={availability} hasPromotions={promotions.length > 0} freeAddOns={freeAcaiExtras} /> :
       <div className="mx-auto max-w-6xl px-4 pb-32 pt-5 md:px-8 md:pt-8">
         {(building || step === 0) && <div className="mb-5 flex items-center justify-between"><button onClick={() => step === 0 ? reset() : setStep(x => x - 1)} className="flex min-h-11 items-center gap-1 text-sm font-bold text-[#4a0b63]"><ChevronLeft size={20} /> Voltar</button>{building && <div className="flex gap-2" aria-label={`Etapa ${step + 1} de ${stepCount}`}>{Array.from({ length: stepCount }).map((_, i) => <span key={i} className={`h-2 rounded-full transition-all ${i <= step ? "w-7 bg-[#c83d76]" : "w-2 bg-[#dfd3df]"}`} />)}</div>}<span className="text-xs font-bold uppercase tracking-[.12em] text-[#7b6b7d]">{building ? `${step + 1}/${stepCount}` : "Promoções"}</span></div>}
-        {building ? <div className="grid gap-6 md:grid-cols-[.9fr_1.1fr] md:items-start lg:gap-12"><div className="md:sticky md:top-28"><Preview kind={kind} format={format} scoop={scoop} shakeSize={shakeSize} flavors={selectedFlavors} extras={selectedExtras} topping={kind === "milkshake" ? shakeFlavor : iceExtra} flavorColors={flavorColors} /><p className="mt-3 text-center text-sm font-bold text-[#4a0b63]">{itemPrice ? formatCurrency(itemPrice) : "Monte do seu jeito"}</p></div><section className="rounded-[28px] border border-[#eadfea] bg-white p-5 shadow-[0_20px_70px_rgba(50,8,65,.08)] md:p-8">{kind === "acai" ? <AcaiStep step={step} size={size} setSize={setSize} selected={selectedExtras} toggle={name => setSelectedExtras(current => current.includes(name) ? current.filter(x => x !== name) : [...current, name])} note={acaiNote} setNote={setAcaiNote} extras={extras} freeAddOns={freeAcaiExtras} /> : kind === "milkshake" ? <ShakeStep step={step} size={shakeSize} setSize={setShakeSize} flavor={shakeFlavor} setFlavor={setShakeFlavor} note={shakeNote} setNote={setShakeNote} flavors={shakeFlavors} /> : <IceStep step={step} format={format} setFormat={setFormat} scoop={scoop} setScoop={value => { setScoop(value); setSelectedFlavors([]); }} selected={selectedFlavors} select={selectFlavor} extra={iceExtra} setExtra={setIceExtra} flavors={flavors} />}</section></div>
-          : step === 0 ? <Promotions promotions={promotions} add={promo => { setCart(current => [...current, { id: uid(), productId: promo.id, name: promo.title, detail: promo.description, price: promo.price, quantity: 1 }]); setStep(1); }} /> : <Checkout cart={cart} setCart={setCart} customer={customer} setCustomer={setCustomer} error={error} submit={submit} addMore={reset} deliveryFee={deliveryFee} acceptedPayments={acceptedPayments} settings={settings} canSubmit={availability.acceptingOrders} availabilityMessage={availability.message} />}
+        {building ? <div className="grid gap-6 md:grid-cols-[.9fr_1.1fr] md:items-start lg:gap-12"><div className="md:sticky md:top-28"><Preview kind={kind} format={selectedFormat?.name ?? ""} scoop={selectedScoop?.name ?? ""} shakeSize={selectedShakeSize?.name ?? ""} flavors={selectedFlavorItems.map((item) => item.name)} extras={selectedExtraItems.map((item) => item.name)} topping={kind === "milkshake" ? selectedShakeFlavor?.name ?? "" : selectedIceExtra?.name ?? ""} flavorColors={flavorColors} /><p className="mt-3 text-center text-sm font-bold text-[#4a0b63]">{itemPrice ? formatCurrency(itemPrice) : "Monte do seu jeito"}</p></div><section className="rounded-[28px] border border-[#eadfea] bg-white p-5 shadow-[0_20px_70px_rgba(50,8,65,.08)] md:p-8">{kind === "acai" ? <AcaiStep step={step} size={size} setSize={setSize} sizes={acaiSizes} selected={selectedExtras} toggle={id => setSelectedExtras(current => current.includes(id) ? current.filter(x => x !== id) : [...current, id])} note={acaiNote} setNote={setAcaiNote} extras={extras} freeAddOns={freeAcaiExtras} /> : kind === "milkshake" ? <ShakeStep step={step} size={shakeSize} setSize={setShakeSize} sizes={milkshakeSizes} flavor={shakeFlavor} setFlavor={setShakeFlavor} note={shakeNote} setNote={setShakeNote} flavors={shakeFlavors} /> : <IceStep step={step} format={format} setFormat={setFormat} formats={iceFormats} scoop={scoop} scoops={iceScoops} setScoop={value => { setScoop(value); setSelectedFlavors([]); }} selected={selectedFlavors} select={selectFlavor} extra={iceExtra} extras={iceToppings} setExtra={setIceExtra} flavors={flavors} />}</section></div>
+          : step === 0 ? <Promotions promotions={promotions} add={promo => { setCart(current => [...current, { id: uid(), name: promo.title, detail: promo.description, price: promo.price, quantity: 1, request: { builderType: "promotion", promotionId: promo.id, quantity: 1 } }]); setStep(1); }} /> : <Checkout cart={cart} setCart={setCart} customer={customer} setCustomer={setCustomer} error={error} submit={submit} submitting={submitting} addMore={reset} deliveryFee={deliveryFee} acceptedPayments={acceptedPayments} settings={settings} canSubmit={availability.acceptingOrders} availabilityMessage={availability.message} />}
       </div>}
     {building && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#3a0a4d]/10 bg-[#fffaf4]/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl"><button disabled={!canAdvance} onClick={() => step < stepCount - 1 ? setStep(x => x + 1) : addBuilt()} className="mx-auto flex min-h-14 w-full max-w-xl items-center justify-center gap-2 rounded-2xl bg-[#f8b900] px-5 font-extrabold text-[#24002f] shadow-lg disabled:opacity-40">{step === stepCount - 1 ? <><Plus size={20} /> Adicionar ao pedido</> : <>Continuar <ArrowRight size={19} /></>}</button></div>}
   </main>;
@@ -125,31 +167,32 @@ function Start({ choose, cart, checkout, availability, hasPromotions, freeAddOns
 }
 function Choice({ title, text, color, icon, action }: { title: string; text: string; color: string; icon: React.ReactNode; action: () => void }) { return <button onClick={action} className="group relative min-h-44 overflow-hidden rounded-[22px] border border-[#eadfea] bg-white p-4 text-left shadow-[0_12px_38px_rgba(50,8,65,.06)] transition hover:-translate-y-1 md:min-h-52 md:rounded-[28px] md:p-6 md:shadow-[0_18px_55px_rgba(50,8,65,.07)]"><span className={`grid h-12 w-12 place-items-center rounded-xl text-white md:h-16 md:w-16 md:rounded-2xl ${color}`}>{icon}</span><h2 className="mt-4 text-base font-extrabold leading-tight tracking-[-.03em] md:mt-6 md:text-xl">{title}</h2><p className="mt-1.5 pr-3 text-xs leading-relaxed text-[#776a79] md:mt-2 md:pr-8 md:text-sm">{text}</p><ArrowRight className="absolute bottom-4 right-4 text-[#c83d76] md:bottom-6 md:right-6" size={18} /></button>; }
 function Heading({ title, text }: { title: string; text: string }) { return <div className="mb-6"><h2 className="text-2xl font-extrabold tracking-[-.04em] text-[#24002f]">{title}</h2><p className="mt-2 text-sm leading-relaxed text-[#756878]">{text}</p></div>; }
-function Options({ values, selected, choose }: { values: { label: string; sub?: string }[]; selected: string | string[]; choose: SetText }) { return <div className="grid grid-cols-2 gap-3">{values.map(x => { const active = Array.isArray(selected) ? selected.includes(x.label) : selected === x.label; return <button key={x.label} onClick={() => choose(x.label)} className={`relative min-h-20 rounded-2xl border p-4 text-left transition ${active ? "border-[#6d2779] bg-[#f4eaf4] shadow-[inset_0_0_0_1px_#6d2779]" : "border-[#eadfea] bg-[#fffdfb]"}`}><span className="block text-sm font-extrabold">{x.label}</span>{x.sub && <span className="mt-1 block text-xs text-[#817284]">{x.sub}</span>}{active && <span className="absolute right-3 top-3 grid h-5 w-5 place-items-center rounded-full bg-[#6d2779] text-white"><Check size={12} /></span>}</button>; })}</div>; }
+function Options({ values, selected, choose }: { values: { id: string; label: string; sub?: string }[]; selected: string | string[]; choose: SetText }) { return <div className="grid grid-cols-2 gap-3">{values.map(x => { const active = Array.isArray(selected) ? selected.includes(x.id) : selected === x.id; return <button key={x.id} onClick={() => choose(x.id)} className={`relative min-h-20 rounded-2xl border p-4 text-left transition ${active ? "border-[#6d2779] bg-[#f4eaf4] shadow-[inset_0_0_0_1px_#6d2779]" : "border-[#eadfea] bg-[#fffdfb]"}`}><span className="block text-sm font-extrabold">{x.label}</span>{x.sub && <span className="mt-1 block text-xs text-[#817284]">{x.sub}</span>}{active && <span className="absolute right-3 top-3 grid h-5 w-5 place-items-center rounded-full bg-[#6d2779] text-white"><Check size={12} /></span>}</button>; })}</div>; }
 
-function AcaiStep({ step, size, setSize, selected, toggle, note, setNote, extras, freeAddOns }: { step: number; size: string; setSize: SetText; selected: string[]; toggle: SetText; note: string; setNote: SetText; extras: ConfigurableItem[]; freeAddOns: number }) {
-  if (step === 0) return <><Heading title="Escolha o tamanho" text="Comece pelo tamanho da sua vontade." /><Options values={sizes.map(x => ({ label: x.name, sub: formatCurrency(x.price) }))} selected={size} choose={setSize} /></>;
+function AcaiStep({ step, size, setSize, sizes, selected, toggle, note, setNote, extras, freeAddOns }: { step: number; size: string; setSize: SetText; sizes: DeliveryBuilderOption[]; selected: string[]; toggle: SetText; note: string; setNote: SetText; extras: ConfigurableItem[]; freeAddOns: number }) {
+  if (step === 0) return <><Heading title="Escolha o tamanho" text="Comece pelo tamanho da sua vontade." />{sizes.length ? <Options values={sizes.map(x => ({ id: x.id, label: x.name, sub: formatCurrency(x.price) }))} selected={size} choose={setSize} /> : <UnavailableOption text="Nenhum tamanho de açaí está disponível no momento." />}</>;
   if (step === 1) {
     const paid = Math.max(0, selected.length - freeAddOns);
-    return <><Heading title={`Escolha até ${freeAddOnsLabel(freeAddOns)}`} text={`A partir do ${freeAddOns + 1}º adicional, o valor de cada item é acrescentado ao total.`} /><div className={`mb-4 rounded-2xl p-4 text-sm font-bold ${paid ? "bg-[#fff3dc] text-[#805315]" : "bg-[#f4eaf4] text-[#5d2468]"}`}><span>{Math.min(selected.length, freeAddOns)} de {freeAddOns} grátis {freeAddOns === 1 ? "selecionado" : "selecionados"}</span>{paid > 0 && <span className="mt-1 block">{paid} {paid === 1 ? "adicional pago" : "adicionais pagos"}</span>}</div><Options values={extras.map((x) => ({ label: x.name, sub: selected.includes(x.name) && selected.indexOf(x.name) >= freeAddOns ? `Pago: ${formatCurrency(x.extraPrice ?? 0)}` : `Após o ${freeAddOns}º: ${formatCurrency(x.extraPrice ?? 0)}` }))} selected={selected} choose={toggle} /></>;
+    return <><Heading title={`Escolha até ${freeAddOnsLabel(freeAddOns)}`} text={`A partir do ${freeAddOns + 1}º adicional, o valor de cada item é acrescentado ao total.`} /><div className={`mb-4 rounded-2xl p-4 text-sm font-bold ${paid ? "bg-[#fff3dc] text-[#805315]" : "bg-[#f4eaf4] text-[#5d2468]"}`}><span>{Math.min(selected.length, freeAddOns)} de {freeAddOns} grátis {freeAddOns === 1 ? "selecionado" : "selecionados"}</span>{paid > 0 && <span className="mt-1 block">{paid} {paid === 1 ? "adicional pago" : "adicionais pagos"}</span>}</div>{extras.length ? <Options values={extras.map((x) => ({ id: x.id, label: x.name, sub: selected.includes(x.id) && selected.indexOf(x.id) >= freeAddOns ? `Pago: ${formatCurrency(x.extraPrice ?? 0)}` : `Após o ${freeAddOns}º: ${formatCurrency(x.extraPrice ?? 0)}` }))} selected={selected} choose={toggle} /> : <UnavailableOption text="Nenhum adicional está disponível no momento." />}</>;
   }
   return <><Heading title="Alguma observação?" text="Este campo é opcional." /><label className="grid gap-2 text-sm font-bold">Observação<textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Ex.: pouco leite condensado, sem colher..." rows={4} className="rounded-2xl border border-[#dfd2df] p-4 font-normal outline-none focus:border-[#6d2779]" /></label></>;
 }
-function IceStep({ step, format, setFormat, scoop, setScoop, selected, select, extra, setExtra, flavors }: { step: number; format: string; setFormat: SetText; scoop: string; setScoop: SetText; selected: string[]; select: SetText; extra: string; setExtra: SetText; flavors: ConfigurableItem[] }) {
-  if (step === 0) return <><Heading title="Como você quer?" text="Escolha onde vamos servir seu sorvete." /><Options values={formats.map(x => ({ label: x.name, sub: x.price ? `+ ${formatCurrency(x.price)}` : undefined }))} selected={format} choose={setFormat} /></>;
-  if (step === 1) return <><Heading title="Quantas bolas?" text="Escolha o tamanho do seu sorvete." /><Options values={scoops.map(x => ({ label: x.name, sub: formatCurrency(x.price) }))} selected={scoop} choose={setScoop} /></>;
-  if (step === 2) return <><Heading title="Escolha os sabores" text={`Você pode escolher até ${scoops.find(x => x.name === scoop)?.max || 1} sabores.`} />{flavors.length ? <Options values={flavors.map((flavor) => ({ label: flavor.name }))} selected={selected} choose={select} /> : <UnavailableOption text="Nenhum sabor de sorvete está disponível no momento." />}</>;
-  return <><Heading title="O toque final" text="Escolha uma cobertura ou adicional." /><Options values={iceExtras.map(label => ({ label }))} selected={extra} choose={setExtra} /></>;
+function IceStep({ step, format, setFormat, formats, scoop, scoops, setScoop, selected, select, extra, extras, setExtra, flavors }: { step: number; format: string; setFormat: SetText; formats: DeliveryBuilderOption[]; scoop: string; scoops: DeliveryBuilderOption[]; setScoop: SetText; selected: string[]; select: SetText; extra: string; extras: DeliveryBuilderOption[]; setExtra: SetText; flavors: ConfigurableItem[] }) {
+  const selectedScoop = scoops.find((item) => item.id === scoop);
+  if (step === 0) return <><Heading title="Como você quer?" text="Escolha onde vamos servir seu sorvete." />{formats.length ? <Options values={formats.map(x => ({ id: x.id, label: x.name, sub: x.price ? `+ ${formatCurrency(x.price)}` : undefined }))} selected={format} choose={setFormat} /> : <UnavailableOption text="Nenhum recipiente está disponível no momento." />}</>;
+  if (step === 1) return <><Heading title="Quantas bolas?" text="Escolha o tamanho do seu sorvete." />{scoops.length ? <Options values={scoops.map(x => ({ id: x.id, label: x.name, sub: formatCurrency(x.price) }))} selected={scoop} choose={setScoop} /> : <UnavailableOption text="Nenhuma opção de sorvete está disponível no momento." />}</>;
+  if (step === 2) return <><Heading title="Escolha os sabores" text={`Você pode escolher ${selectedScoop?.maxFlavors ?? 1} sabores.`} />{flavors.length ? <Options values={flavors.map((flavor) => ({ id: flavor.id, label: flavor.name }))} selected={selected} choose={select} /> : <UnavailableOption text="Nenhum sabor de sorvete está disponível no momento." />}</>;
+  return <><Heading title="O toque final" text="Escolha uma cobertura ou adicional." />{extras.length ? <Options values={extras.map((item) => ({ id: item.id, label: item.name, sub: item.price ? `+ ${formatCurrency(item.price)}` : undefined }))} selected={extra} choose={setExtra} /> : <UnavailableOption text="Nenhuma cobertura está disponível no momento." />}</>;
 }
-function ShakeStep({ step, size, setSize, flavor, setFlavor, note, setNote, flavors }: { step: number; size: string; setSize: SetText; flavor: string; setFlavor: SetText; note: string; setNote: SetText; flavors: ConfigurableItem[] }) {
-  if (step === 0) return <><Heading title="Escolha o tamanho" text="Qual tamanho combina com a sua vontade?" /><Options values={shakeSizes.map(x => ({ label: x.name, sub: formatCurrency(x.price) }))} selected={size} choose={setSize} /></>;
-  if (step === 1) return <><Heading title="Escolha o sabor" text="Seu milk-shake começa por aqui." />{flavors.length ? <Options values={flavors.map((item) => ({ label: item.name }))} selected={flavor} choose={setFlavor} /> : <UnavailableOption text="Nenhum sabor de milk-shake está disponível no momento." />}</>;
+function ShakeStep({ step, size, setSize, sizes, flavor, setFlavor, note, setNote, flavors }: { step: number; size: string; setSize: SetText; sizes: DeliveryBuilderOption[]; flavor: string; setFlavor: SetText; note: string; setNote: SetText; flavors: ConfigurableItem[] }) {
+  if (step === 0) return <><Heading title="Escolha o tamanho" text="Qual tamanho combina com a sua vontade?" />{sizes.length ? <Options values={sizes.map(x => ({ id: x.id, label: x.name, sub: formatCurrency(x.price) }))} selected={size} choose={setSize} /> : <UnavailableOption text="Nenhum tamanho de milk-shake está disponível no momento." />}</>;
+  if (step === 1) return <><Heading title="Escolha o sabor" text="Seu milk-shake começa por aqui." />{flavors.length ? <Options values={flavors.map((item) => ({ id: item.id, label: item.name }))} selected={flavor} choose={setFlavor} /> : <UnavailableOption text="Nenhum sabor de milk-shake está disponível no momento." />}</>;
   return <><Heading title="Alguma observação?" text="Este campo é opcional." /><label className="grid gap-2 text-sm font-bold">Observação<textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Ex.: sem canudo..." rows={4} className="rounded-2xl border border-[#dfd2df] p-4 font-normal outline-none focus:border-[#6d2779]" /></label></>;
 }
 
 function Preview({ kind, format, scoop, shakeSize, flavors: chosen, extras: chosenExtras, topping, flavorColors }: { kind: Kind; format: string; scoop: string; shakeSize: string; flavors: string[]; extras: string[]; topping: string; flavorColors: Record<string, string | undefined> }) {
   const colors: Record<string, string | undefined> = { Chocolate: "#6b3528", Morango: "#e67b91", Creme: "#f5dca6", Flocos: "#e8dfd1", Napolitano: "#d99887", "Açaí": "#4b164f", ...flavorColors };
-  const scoopCount = scoops.find(item => item.name === scoop)?.max || 1;
+  const scoopCount = Number(scoop.match(/^\d+/)?.[0]) || 1;
   return <div className="delivery-preview relative mx-auto grid aspect-[4/3] max-h-[330px] w-full max-w-md place-items-center overflow-hidden rounded-[30px] bg-[radial-gradient(circle_at_50%_35%,#fff_0%,#f5e8ee_48%,#ead8e7_100%)]">
     <div className="absolute left-5 top-5 rounded-full bg-white/75 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[.12em] text-[#6e3974]">Sua prévia</div>
     {kind === "acai" ? <div className="acai-cup"><span className="acai-fill" /><span className="acai-top" />{chosenExtras.includes("Banana") && <span className="fruit fruit-banana" />}{chosenExtras.includes("Morango") && <span className="fruit fruit-strawberry" />}{chosenExtras.includes("Granola") && <span className="granola">••••••</span>}{(chosenExtras.includes("Leite condensado") || topping === "Leite condensado") && <span className="sauce sauce-light" />}{topping === "Chocolate" && <span className="sauce sauce-dark" />}{topping === "Morango" && <span className="sauce sauce-pink" />}</div>
@@ -162,7 +205,7 @@ function Promotions({ promotions, add }: { promotions: Promotion[]; add: (promo:
   return <section><Heading title="Promoções prontas" text="Escolha uma combinação e siga para os dados do pedido." /><div className="grid gap-4 md:grid-cols-2">{promotions.map((promo, index) => <article key={promo.id} className={`relative min-h-56 overflow-hidden rounded-[28px] bg-gradient-to-br p-6 text-white shadow-lg ${index % 2 ? "from-[#9d285b] to-[#51103b]" : "from-[#5b126f] to-[#2d073b]"}`}><div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" /><span className="text-xs font-bold uppercase tracking-[.14em] text-[#ffd75c]">Escolha da Manu</span><h3 className="mt-5 text-2xl font-extrabold tracking-[-.04em]">{promo.title}</h3><p className="mt-2 max-w-sm text-sm leading-relaxed text-white/70">{promo.description}</p><div className="mt-6 flex items-center justify-between"><strong className="text-xl">{formatCurrency(promo.price)}</strong><button onClick={() => add(promo)} className="min-h-11 rounded-full bg-[#f8b900] px-5 text-sm font-extrabold text-[#24002f]">Pedir agora</button></div></article>)}</div></section>;
 }
 
-function Checkout({ cart, setCart, customer, setCustomer, error, submit, addMore, deliveryFee, acceptedPayments, settings, canSubmit, availabilityMessage }: { cart: CartItem[]; setCart: React.Dispatch<React.SetStateAction<CartItem[]>>; customer: Customer; setCustomer: React.Dispatch<React.SetStateAction<Customer>>; error: string; submit: () => void; addMore: () => void; deliveryFee: number; acceptedPayments: PaymentMethod[]; settings: StoreSettings; canSubmit: boolean; availabilityMessage: string }) {
+function Checkout({ cart, setCart, customer, setCustomer, error, submit, submitting, addMore, deliveryFee, acceptedPayments, settings, canSubmit, availabilityMessage }: { cart: CartItem[]; setCart: React.Dispatch<React.SetStateAction<CartItem[]>>; customer: Customer; setCustomer: React.Dispatch<React.SetStateAction<Customer>>; error: string; submit: () => void | Promise<void>; submitting: boolean; addMore: () => void; deliveryFee: number; acceptedPayments: PaymentMethod[]; settings: StoreSettings; canSubmit: boolean; availabilityMessage: string }) {
   const [stage, setStage] = useState<CheckoutStage>("review");
   const [stageError, setStageError] = useState("");
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -207,7 +250,7 @@ function Checkout({ cart, setCart, customer, setCustomer, error, submit, addMore
       return setStage("note");
     }
     if (stage === "note") return setStage("confirm");
-    submit();
+    void submit();
   };
 
   const back = () => {
@@ -217,7 +260,7 @@ function Checkout({ cart, setCart, customer, setCustomer, error, submit, addMore
     setStage(stages[Math.max(0, currentIndex - 1)]);
   };
 
-  const primaryLabel = stage === "confirm" ? "Enviar pedido" : "Continuar";
+  const primaryLabel = submitting ? "Enviando..." : stage === "confirm" ? "Enviar pedido" : "Continuar";
 
   return (
     <div className="mx-auto min-w-0 max-w-2xl pb-24 md:pb-4">
@@ -312,13 +355,13 @@ function Checkout({ cart, setCart, customer, setCustomer, error, submit, addMore
 
         {!canSubmit && <p role="alert" className="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-900">{availabilityMessage}</p>}
         {(stageError || error) && <p role="alert" className="mt-4 rounded-xl bg-[#fff0f3] p-3 text-sm font-bold text-[#a52d54]">{stageError || error}</p>}
-        <button onClick={next} disabled={stage === "confirm" && !canSubmit} className="mt-6 hidden min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#f8b900] px-5 font-extrabold text-[#24002f] shadow-sm disabled:cursor-not-allowed disabled:opacity-40 md:flex">{primaryLabel} <ArrowRight size={19} /></button>
+        <button onClick={next} disabled={submitting || (stage === "confirm" && !canSubmit)} className="mt-6 hidden min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[#f8b900] px-5 font-extrabold text-[#24002f] shadow-sm disabled:cursor-not-allowed disabled:opacity-40 md:flex">{primaryLabel} <ArrowRight size={19} /></button>
       </section>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#3a0a4d]/10 bg-[#fffaf4]/95 p-2.5 pb-[max(.625rem,env(safe-area-inset-bottom))] backdrop-blur-xl md:hidden">
         <div className="flex items-center gap-3">
           <div className="min-w-[84px]"><span className="block text-[10px] font-bold uppercase tracking-wider text-[#817284]">Total</span><strong className="text-base text-[#24002f]">{formatCurrency(total)}</strong></div>
-          <button onClick={next} disabled={stage === "confirm" && !canSubmit} className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[#f8b900] px-4 text-sm font-extrabold text-[#24002f] disabled:cursor-not-allowed disabled:opacity-40">{primaryLabel} <ArrowRight size={18} /></button>
+          <button onClick={next} disabled={submitting || (stage === "confirm" && !canSubmit)} className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[#f8b900] px-4 text-sm font-extrabold text-[#24002f] disabled:cursor-not-allowed disabled:opacity-40">{primaryLabel} <ArrowRight size={18} /></button>
         </div>
       </div>
     </div>
@@ -345,7 +388,6 @@ function ReviewLine({ label, value }: { label: string; value: string }) {
   return <div className="grid grid-cols-[90px_1fr] gap-3"><span className="text-[#817284]">{label}</span><strong className="min-w-0 break-words text-right">{value}</strong></div>;
 }
 function Field({ label, value, change, placeholder, type = "text" }: { label: string; value: string; change: SetText; placeholder: string; type?: string }) { const isPhone = type === "tel"; return <label className="grid min-w-0 gap-1.5 text-xs font-bold md:gap-2 md:text-sm">{label}<input type={type} inputMode={isPhone ? "numeric" : undefined} autoComplete={isPhone ? "tel" : undefined} maxLength={isPhone ? 15 : undefined} value={value} onChange={e => change(e.target.value)} placeholder={placeholder} className="min-h-11 min-w-0 rounded-xl border border-[#dfd2df] px-3 text-sm font-normal outline-none focus:border-[#6d2779] md:min-h-13 md:px-4" /></label>; }
-function Success({ id, restart }: { id: string; restart: () => void }) {
-  const code = createPublicOrderCode(id);
-  return <main className="grid min-h-screen place-items-center bg-[radial-gradient(circle_at_50%_20%,#5b126f,#24002f_62%)] px-5 py-10 text-white"><div className="w-full max-w-lg text-center"><span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#f8b900] text-[#24002f] shadow-[0_0_0_12px_rgba(248,185,0,.1)]"><Check size={36} strokeWidth={3} /></span><p className="mt-8 text-xs font-bold uppercase tracking-[.16em] text-[#f8b900]">Tudo certo</p><h1 className="mt-3 text-4xl font-extrabold tracking-[-.05em]">Pedido enviado</h1><p className="mx-auto mt-4 max-w-sm leading-relaxed text-white/70">Seu pedido chegou para a equipe da Manu.</p><div className="mx-auto mt-7 max-w-xs rounded-2xl border border-white/10 bg-white/10 p-4"><span className="text-xs text-white/60">Código do pedido</span><strong className="mt-1 block text-2xl tracking-[.08em]">#{code}</strong></div><div className="mx-auto mt-7 grid max-w-sm gap-2"><Link href={`/acompanhar/${id}`} className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-[#f8b900] px-7 font-extrabold text-[#24002f]">Acompanhar pedido <ArrowRight size={18} /></Link><button onClick={restart} className="min-h-12 rounded-full border border-white/15 bg-white/10 px-7 font-bold text-white">Fazer outro pedido</button></div><Link href="/" className="mt-5 flex items-center justify-center gap-2 text-sm font-bold text-white/70"><ArrowLeft size={17} /> Voltar ao início</Link></div></main>;
+function Success({ code, restart }: { code: string; restart: () => void }) {
+  return <main className="grid min-h-screen place-items-center bg-[radial-gradient(circle_at_50%_20%,#5b126f,#24002f_62%)] px-5 py-10 text-white"><div className="w-full max-w-lg text-center"><span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#f8b900] text-[#24002f] shadow-[0_0_0_12px_rgba(248,185,0,.1)]"><Check size={36} strokeWidth={3} /></span><p className="mt-8 text-xs font-bold uppercase tracking-[.16em] text-[#f8b900]">Tudo certo</p><h1 className="mt-3 text-4xl font-extrabold tracking-[-.05em]">Pedido enviado</h1><p className="mx-auto mt-4 max-w-sm leading-relaxed text-white/70">Seu pedido chegou para a equipe da Manu.</p><div className="mx-auto mt-7 max-w-xs rounded-2xl border border-white/10 bg-white/10 p-4"><span className="text-xs text-white/60">Código do pedido</span><strong className="mt-1 block text-2xl tracking-[.08em]">#{code}</strong></div><div className="mx-auto mt-7 grid max-w-sm gap-2"><button onClick={restart} className="min-h-12 rounded-full border border-white/15 bg-white/10 px-7 font-bold text-white">Fazer outro pedido</button></div><Link href="/" className="mt-5 flex items-center justify-center gap-2 text-sm font-bold text-white/70"><ArrowLeft size={17} /> Voltar ao início</Link></div></main>;
 }

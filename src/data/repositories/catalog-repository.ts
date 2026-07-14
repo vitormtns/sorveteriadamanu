@@ -1,5 +1,5 @@
-import { ConfigurableItem, Product, Promotion } from "@/lib/types";
-import { mapAddOnFromDatabase, mapFlavorFromDatabase, mapPromotionFromDatabase } from "@/data/mappers/catalog";
+import { ConfigurableItem, DeliveryBuilderOption, Product, Promotion } from "@/lib/types";
+import { mapAddOnFromDatabase, mapDeliveryBuilderOptionFromDatabase, mapFlavorFromDatabase, mapPromotionFromDatabase } from "@/data/mappers/catalog";
 import { mapProductFromDatabase } from "@/data/mappers/product";
 import { fail, ok, RepositoryClient, RepositoryResult } from "./types";
 
@@ -9,6 +9,7 @@ export interface PublicCatalog {
   addOns: ConfigurableItem[];
   iceCreamFlavors: ConfigurableItem[];
   milkshakeFlavors: ConfigurableItem[];
+  deliveryBuilderOptions: DeliveryBuilderOption[];
 }
 
 export interface CatalogRepository {
@@ -18,7 +19,7 @@ export interface CatalogRepository {
 export function createCatalogRepository(client: RepositoryClient): CatalogRepository {
   return {
     async getAvailableCatalog() {
-      const [productsResult, promotionsResult, addOnsResult, flavorsResult] = await Promise.all([
+      const [productsResult, promotionsResult, addOnsResult, flavorsResult, builderOptionsResult] = await Promise.all([
         client
           .from("products")
           .select("*")
@@ -42,12 +43,19 @@ export function createCatalogRepository(client: RepositoryClient): CatalogReposi
           .eq("active", true)
           .eq("available", true)
           .order("display_order", { ascending: true }),
+        client
+          .from("delivery_builder_options")
+          .select("*")
+          .eq("active", true)
+          .eq("available", true)
+          .order("display_order", { ascending: true }),
       ]);
 
       if (productsResult.error) return fail(productsResult.error);
       if (promotionsResult.error) return fail(promotionsResult.error);
       if (addOnsResult.error) return fail(addOnsResult.error);
       if (flavorsResult.error) return fail(flavorsResult.error);
+      if (builderOptionsResult.error) return fail(builderOptionsResult.error);
 
       const flavors = (flavorsResult.data ?? []).map(mapFlavorFromDatabase);
       const now = Date.now();
@@ -61,6 +69,7 @@ export function createCatalogRepository(client: RepositoryClient): CatalogReposi
         addOns: (addOnsResult.data ?? []).map(mapAddOnFromDatabase),
         iceCreamFlavors: flavors.filter((flavor) => flavor.productType === "ice_cream"),
         milkshakeFlavors: flavors.filter((flavor) => flavor.productType === "milkshake"),
+        deliveryBuilderOptions: (builderOptionsResult.data ?? []).map(mapDeliveryBuilderOptionFromDatabase),
       });
     },
   };

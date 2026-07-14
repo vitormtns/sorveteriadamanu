@@ -1,4 +1,4 @@
-import { PaymentMethod, StoreSettings, WeekdayKey } from "./types";
+import { DeliveryBuilderOption, PaymentMethod, StoreSettings, WeekdayKey } from "./types";
 
 const standardHours = { enabled: true, open: "12:00", close: "22:00" };
 
@@ -117,6 +117,30 @@ export const paymentLabels: Record<PaymentMethod, string> = {
   Cartão: "Cartão",
   "A combinar": "A combinar",
 };
+
+// Dados exclusivos do modo de demonstração quando o Supabase não está configurado.
+const demoDeliveryBuilderOptions: Array<[DeliveryBuilderOption["builderType"], DeliveryBuilderOption["optionType"], string, string, number, number | undefined]> = [
+  ["acai", "size", "300ml", "300 ml", 14, undefined], ["acai", "size", "500ml", "500 ml", 19, undefined], ["acai", "size", "700ml", "700 ml", 25, undefined], ["acai", "size", "1l", "1 litro", 34, undefined],
+  ["ice_cream", "format", "cup", "Copo", 0, undefined], ["ice_cream", "format", "cone", "Casquinha", 0, undefined],
+  ["ice_cream", "scoop", "one", "1 bola", 7, 1], ["ice_cream", "scoop", "two", "2 bolas", 12, 2], ["ice_cream", "scoop", "three", "3 bolas", 16, 3],
+  ["ice_cream", "topping", "chocolate", "Chocolate", 0, undefined], ["ice_cream", "topping", "strawberry", "Morango", 0, undefined], ["ice_cream", "topping", "condensed-milk", "Leite condensado", 0, undefined], ["ice_cream", "topping", "sprinkles", "Granulado", 0, undefined], ["ice_cream", "topping", "none", "Sem cobertura", 0, undefined],
+  ["milkshake", "size", "300ml", "300 ml", 12, undefined], ["milkshake", "size", "500ml", "500 ml", 17, undefined], ["milkshake", "size", "700ml", "700 ml", 22, undefined],
+];
+
+export const initialDeliveryBuilderOptions: DeliveryBuilderOption[] = demoDeliveryBuilderOptions.map(([builderType, optionType, code, name, price, maxFlavors], index) => ({
+  id: `demo-builder-${code}-${index}`,
+  builderType,
+  optionType,
+  code,
+  name,
+  price,
+  maxFlavors,
+  active: true,
+  available: true,
+  displayOrder: index + 1,
+  createdAt: "",
+  updatedAt: "",
+}));
 
 export function normalizeSettings(saved?: Partial<StoreSettings> | null): StoreSettings {
   if (!saved) return initialSettings;

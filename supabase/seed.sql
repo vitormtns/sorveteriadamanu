@@ -9,6 +9,8 @@ insert into public.store_settings (
   delivery_fee,
   minimum_order,
   free_add_ons_quantity,
+  temporary_pause,
+  accepted_payment_methods,
   pix_key,
   payment_note,
   whatsapp,
@@ -30,6 +32,8 @@ values (
   5.00,
   0.00,
   3,
+  false,
+  array['Pix', 'Dinheiro', 'Cartão', 'A combinar']::public.payment_method[],
   '',
   '',
   '',
@@ -50,6 +54,8 @@ on conflict (id) do update set
   delivery_fee = excluded.delivery_fee,
   minimum_order = excluded.minimum_order,
   free_add_ons_quantity = excluded.free_add_ons_quantity,
+  temporary_pause = excluded.temporary_pause,
+  accepted_payment_methods = excluded.accepted_payment_methods,
   pix_key = excluded.pix_key,
   payment_note = excluded.payment_note,
   whatsapp = excluded.whatsapp,
@@ -139,4 +145,31 @@ on conflict (title) do update set
   price = excluded.price,
   active = excluded.active,
   featured_on_home = excluded.featured_on_home,
+  display_order = excluded.display_order;
+
+insert into public.delivery_builder_options (builder_type, option_type, code, name, price, max_flavors, active, available, display_order)
+values
+  ('acai', 'size', '300ml', '300 ml', 14.00, null, true, true, 1),
+  ('acai', 'size', '500ml', '500 ml', 19.00, null, true, true, 2),
+  ('acai', 'size', '700ml', '700 ml', 25.00, null, true, true, 3),
+  ('acai', 'size', '1l', '1 litro', 34.00, null, true, true, 4),
+  ('ice_cream', 'format', 'cup', 'Copo', 0.00, null, true, true, 1),
+  ('ice_cream', 'format', 'cone', 'Casquinha', 0.00, null, true, true, 2),
+  ('ice_cream', 'scoop', 'one', '1 bola', 7.00, 1, true, true, 1),
+  ('ice_cream', 'scoop', 'two', '2 bolas', 12.00, 2, true, true, 2),
+  ('ice_cream', 'scoop', 'three', '3 bolas', 16.00, 3, true, true, 3),
+  ('ice_cream', 'topping', 'chocolate', 'Chocolate', 0.00, null, true, true, 1),
+  ('ice_cream', 'topping', 'strawberry', 'Morango', 0.00, null, true, true, 2),
+  ('ice_cream', 'topping', 'condensed-milk', 'Leite condensado', 0.00, null, true, true, 3),
+  ('ice_cream', 'topping', 'sprinkles', 'Granulado', 0.00, null, true, true, 4),
+  ('ice_cream', 'topping', 'none', 'Sem cobertura', 0.00, null, true, true, 5),
+  ('milkshake', 'size', '300ml', '300 ml', 12.00, null, true, true, 1),
+  ('milkshake', 'size', '500ml', '500 ml', 17.00, null, true, true, 2),
+  ('milkshake', 'size', '700ml', '700 ml', 22.00, null, true, true, 3)
+on conflict (builder_type, option_type, code) do update set
+  name = excluded.name,
+  price = excluded.price,
+  max_flavors = excluded.max_flavors,
+  active = excluded.active,
+  available = excluded.available,
   display_order = excluded.display_order;

@@ -7,6 +7,8 @@ export type OrderStatus = "new" | "preparing" | "ready" | "delivered" | "cancele
 export type OrderOrigin = "internal" | "delivery";
 export type DeliveryType = "pickup" | "delivery";
 export type FlavorProductType = "ice_cream" | "milkshake";
+export type DeliveryBuilderType = "acai" | "ice_cream" | "milkshake";
+export type DeliveryBuilderOptionType = "size" | "format" | "scoop" | "topping";
 
 export interface Product {
   id: string;
@@ -56,6 +58,21 @@ export interface ConfigurableItem {
   displayOrder?: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface DeliveryBuilderOption {
+  id: string;
+  builderType: DeliveryBuilderType;
+  optionType: DeliveryBuilderOptionType;
+  code: string;
+  name: string;
+  price: number;
+  maxFlavors?: number;
+  active: boolean;
+  available: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface StoreSettings {
