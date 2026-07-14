@@ -1,20 +1,24 @@
 export type ProductCategory = "Açaí" | "Sorvetes" | "Milk-shakes" | "Sobremesas" | "Promoções" | "Bebidas" | "Outros";
-export type PaymentMethod = "Pix" | "Dinheiro" | "Cartão" | "Fiado/Outro";
+export type PaymentMethod = "Pix" | "Dinheiro" | "Cartão" | "A combinar";
+export type LegacyPaymentMethod = "Fiado/Outro";
 export type LegacyOrderStatus = "pending_payment" | "paid" | "canceled";
 export type PaymentStatus = "pending" | "paid";
 export type OrderStatus = "new" | "preparing" | "ready" | "delivered" | "canceled";
 export type OrderOrigin = "internal" | "delivery";
 export type DeliveryType = "pickup" | "delivery";
+export type FlavorProductType = "ice_cream" | "milkshake";
 
 export interface Product {
   id: string;
   name: string;
   category: ProductCategory;
+  description?: string;
   price: number;
   active: boolean;
   availableToday: boolean;
   featured: boolean;
   displayOrder: number;
+  imageUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -34,16 +38,24 @@ export interface Promotion {
   price: number;
   active: boolean;
   featuredOnHome: boolean;
+  validFrom?: string;
   validUntil?: string;
   imageUrl?: string;
+  displayOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ConfigurableItem {
   id: string;
   name: string;
+  active?: boolean;
   available: boolean;
   extraPrice?: number;
   previewColor?: string;
+  displayOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface StoreSettings {
@@ -60,6 +72,8 @@ export interface StoreSettings {
   businessHours: Record<WeekdayKey, BusinessHour>;
   delivery: {
     fee: number;
+    minimumOrder: number;
+    freeAddOnsQuantity: number;
   };
   payments: {
     accepted: Record<PaymentMethod, boolean>;
@@ -82,10 +96,14 @@ export interface StoreSettings {
 
 export interface OrderItem {
   id: string;
-  productId: string;
+  productId?: string;
   productName: string;
+  category?: ProductCategory;
   quantity: number;
   unitPrice: number;
+  subtotal?: number;
+  details?: Record<string, unknown>;
+  notes?: string;
 }
 
 export interface Order {
@@ -99,14 +117,23 @@ export interface Order {
   orderStatus: OrderStatus;
   /** Campo legado mantido durante o MVP para compatibilidade com dados antigos. */
   status?: LegacyOrderStatus;
+  subtotal?: number;
+  deliveryFee?: number;
+  discount?: number;
   total: number;
+  cancellationReason?: string;
+  acceptedAt?: string;
+  preparingAt?: string;
+  readyAt?: string;
+  completedAt?: string;
+  canceledAt?: string;
   createdAt: string;
   updatedAt: string;
   origin: OrderOrigin;
   deliveryType: DeliveryType;
-  deliveryFee?: number;
   address?: string;
   publicCode?: string;
+  createdBy?: string;
 }
 
 export type NewOrder = Omit<Order, "id" | "createdAt" | "updatedAt">;

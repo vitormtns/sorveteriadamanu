@@ -233,7 +233,7 @@ function ClosingSummary({ orders }: { orders: Order[] }) {
   const pendingTotal = pending.reduce((sum, order) => sum + order.total, 0);
   const canceledTotal = canceled.reduce((sum, order) => sum + order.total, 0);
   const averageTicket = valid.length ? sold / valid.length : 0;
-  const methods = (["Pix", "Dinheiro", "Cartão", "Fiado/Outro"] as const).map((method) => ({
+  const methods = (["Pix", "Dinheiro", "Cartão", "A combinar"] as const).map((method) => ({
     method,
     quantity: valid.filter((order) => order.paymentMethod === method).length,
     total: valid.filter((order) => order.paymentMethod === method).reduce((sum, order) => sum + order.total, 0),

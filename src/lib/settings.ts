@@ -44,13 +44,15 @@ export const initialSettings: StoreSettings = {
   },
   delivery: {
     fee: 5,
+    minimumOrder: 0,
+    freeAddOnsQuantity: 3,
   },
   payments: {
     accepted: {
       Pix: true,
       Dinheiro: true,
       Cartão: true,
-      "Fiado/Outro": true,
+      "A combinar": true,
     },
     pixKey: "",
     note: "",
@@ -113,7 +115,7 @@ export const paymentLabels: Record<PaymentMethod, string> = {
   Pix: "Pix",
   Dinheiro: "Dinheiro",
   Cartão: "Cartão",
-  "Fiado/Outro": "A combinar",
+  "A combinar": "A combinar",
 };
 
 export function normalizeSettings(saved?: Partial<StoreSettings> | null): StoreSettings {
@@ -122,6 +124,16 @@ export function normalizeSettings(saved?: Partial<StoreSettings> | null): StoreS
   if (site.whatsapp === "(00) 00000-0000") site.whatsapp = "";
   if (site.address === "Endereço em atualização") site.address = "";
   if (site.displayedHours === "Consulte o horário do dia") site.displayedHours = initialSettings.site.displayedHours;
+  const savedAccepted = saved.payments?.accepted as Partial<Record<PaymentMethod | "Fiado/Outro", boolean>> | undefined;
+  const accepted = {
+    ...initialSettings.payments.accepted,
+    ...savedAccepted,
+  };
+  if (typeof savedAccepted?.["Fiado/Outro"] === "boolean") {
+    accepted["A combinar"] = savedAccepted["Fiado/Outro"];
+  }
+  delete (accepted as Partial<Record<"Fiado/Outro", boolean>>)["Fiado/Outro"];
+
   return {
     ...initialSettings,
     ...saved,
@@ -135,11 +147,13 @@ export function normalizeSettings(saved?: Partial<StoreSettings> | null): StoreS
     ) as StoreSettings["businessHours"],
     delivery: {
       fee: Math.max(0, Number(saved.delivery?.fee ?? initialSettings.delivery.fee) || 0),
+      minimumOrder: Math.max(0, Number(saved.delivery?.minimumOrder ?? initialSettings.delivery.minimumOrder) || 0),
+      freeAddOnsQuantity: Math.max(0, Math.floor(Number(saved.delivery?.freeAddOnsQuantity ?? initialSettings.delivery.freeAddOnsQuantity) || 0)),
     },
     payments: {
       ...initialSettings.payments,
       ...saved.payments,
-      accepted: { ...initialSettings.payments.accepted, ...saved.payments?.accepted },
+      accepted,
     },
     promotions: saved.promotions ?? initialSettings.promotions,
     acaiExtras: saved.acaiExtras ?? initialSettings.acaiExtras,

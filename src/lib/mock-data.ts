@@ -50,7 +50,7 @@ export const initialOrders: Order[] = [
   {
     id: "o5", customerName: "Carla Mendes", phone: "(11) 97777-1010",
     items: [{ id: "i5", productId: "p5", productName: "Taça especial", quantity: 2, unitPrice: 16 }],
-    paymentMethod: "Fiado/Outro", paymentStatus: "pending", orderStatus: "delivered", status: "pending_payment",
+    paymentMethod: "A combinar", paymentStatus: "pending", orderStatus: "delivered", status: "pending_payment",
     total: 32, origin: "internal", deliveryType: "pickup", createdAt: at(17, 15, 1), updatedAt: at(17, 40, 1),
   },
   {

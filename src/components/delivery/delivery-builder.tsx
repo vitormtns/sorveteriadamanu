@@ -298,7 +298,7 @@ function Checkout({ cart, setCart, customer, setCustomer, error, submit, addMore
               {customer.deliveryType === "delivery" && <ReviewLine label="Endereço" value={customer.address} />}
               <ReviewLine label="Nome" value={customer.name} />
               <ReviewLine label="WhatsApp" value={customer.phone} />
-              <ReviewLine label="Pagamento" value={customer.payment === "Fiado/Outro" ? "A combinar" : customer.payment} />
+              <ReviewLine label="Pagamento" value={customer.payment} />
               {customer.notes.trim() && <ReviewLine label="Observação" value={customer.notes} />}
             </div>
             {deliveryFee > 0 && <div className="mt-4 flex items-center justify-between border-t border-[#eadfea] pt-4 text-sm text-[#796b7b]"><span>Subtotal</span><strong>{formatCurrency(subtotal)}</strong></div>}

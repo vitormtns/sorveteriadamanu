@@ -2,7 +2,7 @@
 
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { initialOrders, initialProducts } from "@/lib/mock-data";
-import { LegacyOrderStatus, NewOrder, Order, Product, StoreSettings } from "@/lib/types";
+import { LegacyOrderStatus, LegacyPaymentMethod, NewOrder, Order, PaymentMethod, Product, StoreSettings } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { createPublicOrderCode } from "@/lib/order-code";
 import { initialSettings, normalizeSettings } from "@/lib/settings";
@@ -36,9 +36,12 @@ function normalizeOrder(order: Partial<Order> & Pick<Order, "id" | "customerName
   const legacyStatus = order.status as LegacyOrderStatus | undefined;
   const paymentStatus = order.paymentStatus ?? (legacyStatus === "paid" ? "paid" : "pending");
   const orderStatus = order.orderStatus ?? (legacyStatus === "canceled" ? "canceled" : legacyStatus === "paid" ? "delivered" : "new");
+  const rawPaymentMethod = order.paymentMethod as PaymentMethod | LegacyPaymentMethod;
+  const paymentMethod = rawPaymentMethod === "Fiado/Outro" ? "A combinar" : rawPaymentMethod;
 
   return {
     ...order,
+    paymentMethod,
     paymentStatus,
     orderStatus,
     status: orderStatus === "canceled" ? "canceled" : paymentStatus === "paid" ? "paid" : "pending_payment",
