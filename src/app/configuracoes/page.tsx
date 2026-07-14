@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode } from "react";
 import Link from "next/link";
 import {
   BadgePercent,
@@ -25,19 +25,10 @@ import { uid } from "@/lib/utils";
 type ItemListKey = "acaiExtras" | "iceCreamFlavors" | "milkshakeFlavors";
 
 export default function SettingsPage() {
-  const { products, settings, settingsSaveError, updateSettings } = useStore();
-  const [saveState, setSaveState] = useState<"saving" | "saved">("saved");
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-  }, []);
+  const { products, settings, settingsSaveError, settingsSaving, dataError, updateSettings } = useStore();
 
   const update = (recipe: (current: StoreSettings) => StoreSettings) => {
-    setSaveState("saving");
     updateSettings(recipe);
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => setSaveState("saved"), 450);
   };
   const setStatus = <K extends keyof StoreSettings["status"]>(key: K, value: StoreSettings["status"][K]) =>
     update((current) => ({ ...current, status: { ...current.status, [key]: value } }));
@@ -108,10 +99,11 @@ export default function SettingsPage() {
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
         <div>
           <h2 className="text-2xl font-extrabold tracking-[-.04em] text-[var(--text)]">Configurações da loja</h2>
-          <p className="mt-1 max-w-2xl text-sm text-[var(--muted)]">Gerencie a operação, o delivery e o conteúdo do site. As alterações são salvas automaticamente neste dispositivo.</p>
+          <p className="mt-1 max-w-2xl text-sm text-[var(--muted)]">Gerencie a operação, o delivery e o conteúdo do site. As alterações são salvas no Supabase.</p>
         </div>
-        <span role="status" className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${settingsSaveError ? "bg-red-50 text-red-700" : saveState === "saved" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}><Save size={15} /> {settingsSaveError ? "Não foi possível salvar" : saveState === "saved" ? "Alterações salvas" : "Salvando..."}</span>
+        <span role="status" className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${settingsSaveError ? "bg-red-50 text-red-700" : settingsSaving ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700"}`}><Save size={15} /> {settingsSaveError ? "Não foi possível salvar" : settingsSaving ? "Salvando..." : "Alterações salvas"}</span>
       </div>
+      {dataError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{dataError}</p>}
 
       <Section icon={<Store />} title="Status da loja" description="Controle rapidamente quando os pedidos online podem entrar." open>
         <div className="grid gap-3 sm:grid-cols-2">

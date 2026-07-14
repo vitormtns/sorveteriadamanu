@@ -20,7 +20,7 @@ import {
 import Link from "next/link";
 import { useStore } from "@/components/store-provider";
 import { Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
-import { PaymentMethod, PaymentStatus, Product } from "@/lib/types";
+import { ConfigurableItem, PaymentMethod, PaymentStatus, Product } from "@/lib/types";
 import { formatCurrency, uid } from "@/lib/utils";
 import { formatPhone, isValidPhone } from "@/lib/phone";
 
@@ -41,17 +41,6 @@ const acaiSizes = [
   { name: "700 ml", price: 25 },
   { name: "1 litro", price: 34 },
 ];
-const FREE_ACAI_EXTRAS = 3;
-const acaiExtras = [
-  { name: "Leite condensado", price: 2 },
-  { name: "Leite em pó", price: 2 },
-  { name: "Granola", price: 2 },
-  { name: "Banana", price: 2 },
-  { name: "Morango", price: 3 },
-  { name: "Paçoca", price: 2 },
-  { name: "Amendoim", price: 2 },
-  { name: "Nutella", price: 3 },
-];
 const iceFormats = [
   { name: "Copo", price: 0 },
   { name: "Casquinha", price: 0 },
@@ -62,13 +51,11 @@ const iceScoops = [
   { name: "2 bolas", price: 12, max: 2 },
   { name: "3 bolas", price: 16, max: 3 },
 ];
-const iceFlavors = ["Chocolate", "Morango", "Creme", "Flocos", "Napolitano", "Açaí"];
 const shakeSizes = [
   { name: "300 ml", price: 12 },
   { name: "500 ml", price: 17 },
   { name: "700 ml", price: 22 },
 ];
-const shakeFlavors = ["Chocolate", "Morango", "Ovomaltine", "Leite Ninho", "Açaí", "Creme"];
 
 const categoryOptions: { kind: Kind; title: string; description: string; icon: typeof Sparkles; tone: string }[] = [
   { kind: "acai", title: "Açaí", description: "Tamanho e adicionais", icon: Sparkles, tone: "bg-[#4a0b63] text-white" },
@@ -79,7 +66,7 @@ const categoryOptions: { kind: Kind; title: string; description: string; icon: t
 ];
 
 export default function NewOrderPage() {
-  const { products, addOrder } = useStore();
+  const { products, settings, addOrder } = useStore();
   const [phase, setPhase] = useState<Phase>("build");
   const [kind, setKind] = useState<Kind | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -106,9 +93,13 @@ export default function NewOrderPage() {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("paid");
 
   const total = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
-  const paidExtras = selectedExtras.slice(FREE_ACAI_EXTRAS);
+  const freeAcaiExtras = settings.delivery.freeAddOnsQuantity;
+  const acaiExtras = settings.acaiExtras.filter((item) => item.active !== false && item.available && item.name.trim());
+  const iceFlavors = settings.iceCreamFlavors.filter((item) => item.active !== false && item.available && item.name.trim()).map((item) => item.name);
+  const shakeFlavors = settings.milkshakeFlavors.filter((item) => item.active !== false && item.available && item.name.trim()).map((item) => item.name);
+  const paidExtras = selectedExtras.slice(freeAcaiExtras);
   const acaiPrice = (acaiSizes.find((item) => item.name === acaiSize)?.price || 0)
-    + paidExtras.reduce((sum, name) => sum + (acaiExtras.find((item) => item.name === name)?.price || 0), 0);
+    + paidExtras.reduce((sum, name) => sum + (acaiExtras.find((item) => item.name === name)?.extraPrice || 0), 0);
   const icePrice = (iceScoops.find((item) => item.name === iceScoop)?.price || 0)
     + (iceFormats.find((item) => item.name === iceFormat)?.price || 0);
   const shakePrice = shakeSizes.find((item) => item.name === shakeSize)?.price || 0;
@@ -144,7 +135,7 @@ export default function NewOrderPage() {
 
   function addAcai() {
     if (!acaiSize) return setMessage("Escolha o tamanho do açaí.");
-    const included = selectedExtras.slice(0, FREE_ACAI_EXTRAS);
+    const included = selectedExtras.slice(0, freeAcaiExtras);
     const details = [
       included.length ? `Inclusos: ${included.join(", ")}` : "Sem adicionais",
       paidExtras.length ? `Pagos: ${paidExtras.join(", ")}` : "",
@@ -296,6 +287,8 @@ export default function NewOrderPage() {
                   setNote={setAcaiNote}
                   price={acaiPrice}
                   add={addAcai}
+                  extras={acaiExtras}
+                  freeAddOns={freeAcaiExtras}
                 />
               )}
               {kind === "icecream" && (
@@ -310,6 +303,7 @@ export default function NewOrderPage() {
                   setNote={setIceNote}
                   price={icePrice}
                   add={addIceCream}
+                  flavors={iceFlavors}
                 />
               )}
               {kind === "milkshake" && (
@@ -322,6 +316,7 @@ export default function NewOrderPage() {
                   setNote={setShakeNote}
                   price={shakePrice}
                   add={addMilkshake}
+                  flavors={shakeFlavors}
                 />
               )}
               {kind === "promo" && <Promotions products={promotions} add={addCartItem} />}
@@ -388,18 +383,18 @@ function OptionButton({ label, detail, active, onClick }: { label: string; detai
   return <button type="button" onClick={onClick} className={`relative min-h-14 min-w-0 rounded-xl border p-3 text-left transition active:scale-[.98] ${active ? "border-[#6d2779] bg-[#f4eaf4] shadow-[inset_0_0_0_1px_#6d2779]" : "border-[var(--border)] bg-white"}`}><span className="block text-xs font-extrabold">{label}</span>{detail && <span className="mt-0.5 block text-[10px] text-[var(--muted)]">{detail}</span>}{active && <Check className="absolute right-2 top-2 text-[#6d2779]" size={14} />}</button>;
 }
 
-function AcaiBuilder({ size, setSize, selectedExtras, toggleExtra, note, setNote, price, add }: { size: string; setSize: (value: string) => void; selectedExtras: string[]; toggleExtra: (value: string) => void; note: string; setNote: (value: string) => void; price: number; add: () => void }) {
-  const paidCount = Math.max(0, selectedExtras.length - FREE_ACAI_EXTRAS);
-  return <Card className="grid gap-5 p-4 md:p-5"><BuilderHeader title="Montar açaí" description="Tamanho, adicionais e pronto." price={price} /><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">1. Tamanho</h4><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{acaiSizes.map((item) => <OptionButton key={item.name} label={item.name} detail={formatCurrency(item.price)} active={size === item.name} onClick={() => setSize(item.name)} />)}</div></section><section><div className="mb-2 flex items-center justify-between gap-2"><h4 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">2. Adicionais</h4><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${paidCount ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{Math.min(selectedExtras.length, 3)}/3 grátis{paidCount ? ` · ${paidCount} pago${paidCount > 1 ? "s" : ""}` : ""}</span></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{acaiExtras.map((item) => { const index = selectedExtras.indexOf(item.name); const detail = index >= FREE_ACAI_EXTRAS ? `+ ${formatCurrency(item.price)}` : index >= 0 ? "Grátis" : selectedExtras.length >= FREE_ACAI_EXTRAS ? `+ ${formatCurrency(item.price)}` : "Incluso"; return <OptionButton key={item.name} label={item.name} detail={detail} active={index >= 0} onClick={() => toggleExtra(item.name)} />; })}</div></section><Field label="Observação do item (opcional)"><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ex.: pouco leite condensado" /></Field><Button onClick={add} className="min-h-13 w-full"><Plus size={18} /> Adicionar açaí</Button></Card>;
+function AcaiBuilder({ size, setSize, selectedExtras, toggleExtra, note, setNote, price, add, extras, freeAddOns }: { size: string; setSize: (value: string) => void; selectedExtras: string[]; toggleExtra: (value: string) => void; note: string; setNote: (value: string) => void; price: number; add: () => void; extras: ConfigurableItem[]; freeAddOns: number }) {
+  const paidCount = Math.max(0, selectedExtras.length - freeAddOns);
+  return <Card className="grid gap-5 p-4 md:p-5"><BuilderHeader title="Montar açaí" description="Tamanho, adicionais e pronto." price={price} /><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">1. Tamanho</h4><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{acaiSizes.map((item) => <OptionButton key={item.name} label={item.name} detail={formatCurrency(item.price)} active={size === item.name} onClick={() => setSize(item.name)} />)}</div></section><section><div className="mb-2 flex items-center justify-between gap-2"><h4 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">2. Adicionais</h4><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${paidCount ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{Math.min(selectedExtras.length, freeAddOns)}/{freeAddOns} grátis{paidCount ? ` · ${paidCount} pago${paidCount > 1 ? "s" : ""}` : ""}</span></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{extras.map((item) => { const index = selectedExtras.indexOf(item.name); const detail = index >= freeAddOns ? `+ ${formatCurrency(item.extraPrice ?? 0)}` : index >= 0 ? "Grátis" : selectedExtras.length >= freeAddOns ? `+ ${formatCurrency(item.extraPrice ?? 0)}` : "Incluso"; return <OptionButton key={item.name} label={item.name} detail={detail} active={index >= 0} onClick={() => toggleExtra(item.name)} />; })}</div>{!extras.length && <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Nenhum adicional está disponível no momento.</p>}</section><Field label="Observação do item (opcional)"><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ex.: pouco leite condensado" /></Field><Button onClick={add} className="min-h-13 w-full"><Plus size={18} /> Adicionar açaí</Button></Card>;
 }
 
-function IceCreamBuilder({ format, setFormat, scoop, setScoop, selectedFlavors, toggleFlavor, note, setNote, price, add }: { format: string; setFormat: (value: string) => void; scoop: string; setScoop: (value: string) => void; selectedFlavors: string[]; toggleFlavor: (value: string) => void; note: string; setNote: (value: string) => void; price: number; add: () => void }) {
+function IceCreamBuilder({ format, setFormat, scoop, setScoop, selectedFlavors, toggleFlavor, note, setNote, price, add, flavors }: { format: string; setFormat: (value: string) => void; scoop: string; setScoop: (value: string) => void; selectedFlavors: string[]; toggleFlavor: (value: string) => void; note: string; setNote: (value: string) => void; price: number; add: () => void; flavors: string[] }) {
   const maxFlavors = iceScoops.find((item) => item.name === scoop)?.max || 1;
-  return <Card className="grid gap-5 p-4 md:p-5"><BuilderHeader title="Montar sorvete" description="Escolha como servir, as bolas e os sabores." price={price} /><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">1. Tipo</h4><div className="grid grid-cols-3 gap-2">{iceFormats.map((item) => <OptionButton key={item.name} label={item.name} detail={item.price ? `+ ${formatCurrency(item.price)}` : "Incluso"} active={format === item.name} onClick={() => setFormat(item.name)} />)}</div></section><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">2. Quantidade</h4><div className="grid grid-cols-3 gap-2">{iceScoops.map((item) => <OptionButton key={item.name} label={item.name} detail={formatCurrency(item.price)} active={scoop === item.name} onClick={() => setScoop(item.name)} />)}</div></section><section><div className="mb-2 flex justify-between gap-2"><h4 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">3. Sabores</h4><span className="text-[10px] font-bold text-[var(--muted)]">Até {maxFlavors}</span></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{iceFlavors.map((flavor) => <OptionButton key={flavor} label={flavor} active={selectedFlavors.includes(flavor)} onClick={() => toggleFlavor(flavor)} />)}</div></section><Field label="Observação do item (opcional)"><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ex.: sabores separados" /></Field><Button onClick={add} className="min-h-13 w-full"><Plus size={18} /> Adicionar sorvete</Button></Card>;
+  return <Card className="grid gap-5 p-4 md:p-5"><BuilderHeader title="Montar sorvete" description="Escolha como servir, as bolas e os sabores." price={price} /><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">1. Tipo</h4><div className="grid grid-cols-3 gap-2">{iceFormats.map((item) => <OptionButton key={item.name} label={item.name} detail={item.price ? `+ ${formatCurrency(item.price)}` : "Incluso"} active={format === item.name} onClick={() => setFormat(item.name)} />)}</div></section><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">2. Quantidade</h4><div className="grid grid-cols-3 gap-2">{iceScoops.map((item) => <OptionButton key={item.name} label={item.name} detail={formatCurrency(item.price)} active={scoop === item.name} onClick={() => setScoop(item.name)} />)}</div></section><section><div className="mb-2 flex justify-between gap-2"><h4 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">3. Sabores</h4><span className="text-[10px] font-bold text-[var(--muted)]">Até {maxFlavors}</span></div>{flavors.length ? <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{flavors.map((flavor) => <OptionButton key={flavor} label={flavor} active={selectedFlavors.includes(flavor)} onClick={() => toggleFlavor(flavor)} />)}</div> : <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Nenhum sabor de sorvete está disponível no momento.</p>}</section><Field label="Observação do item (opcional)"><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ex.: sabores separados" /></Field><Button onClick={add} className="min-h-13 w-full"><Plus size={18} /> Adicionar sorvete</Button></Card>;
 }
 
-function MilkshakeBuilder({ size, setSize, flavor, setFlavor, note, setNote, price, add }: { size: string; setSize: (value: string) => void; flavor: string; setFlavor: (value: string) => void; note: string; setNote: (value: string) => void; price: number; add: () => void }) {
-  return <Card className="grid gap-5 p-4 md:p-5"><BuilderHeader title="Montar milk-shake" description="Só tamanho e sabor." price={price} /><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">1. Tamanho</h4><div className="grid grid-cols-3 gap-2">{shakeSizes.map((item) => <OptionButton key={item.name} label={item.name} detail={formatCurrency(item.price)} active={size === item.name} onClick={() => setSize(item.name)} />)}</div></section><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">2. Sabor</h4><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{shakeFlavors.map((item) => <OptionButton key={item} label={item} active={flavor === item} onClick={() => setFlavor(item)} />)}</div></section><Field label="Observação do item (opcional)"><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ex.: sem canudo" /></Field><Button onClick={add} className="min-h-13 w-full"><Plus size={18} /> Adicionar milk-shake</Button></Card>;
+function MilkshakeBuilder({ size, setSize, flavor, setFlavor, note, setNote, price, add, flavors }: { size: string; setSize: (value: string) => void; flavor: string; setFlavor: (value: string) => void; note: string; setNote: (value: string) => void; price: number; add: () => void; flavors: string[] }) {
+  return <Card className="grid gap-5 p-4 md:p-5"><BuilderHeader title="Montar milk-shake" description="Só tamanho e sabor." price={price} /><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">1. Tamanho</h4><div className="grid grid-cols-3 gap-2">{shakeSizes.map((item) => <OptionButton key={item.name} label={item.name} detail={formatCurrency(item.price)} active={size === item.name} onClick={() => setSize(item.name)} />)}</div></section><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">2. Sabor</h4>{flavors.length ? <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{flavors.map((item) => <OptionButton key={item} label={item} active={flavor === item} onClick={() => setFlavor(item)} />)}</div> : <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Nenhum sabor de milk-shake está disponível no momento.</p>}</section><Field label="Observação do item (opcional)"><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ex.: sem canudo" /></Field><Button onClick={add} className="min-h-13 w-full"><Plus size={18} /> Adicionar milk-shake</Button></Card>;
 }
 
 function Promotions({ products, add }: { products: Product[]; add: (item: Omit<CartItem, "id" | "quantity">) => void }) {

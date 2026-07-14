@@ -114,6 +114,16 @@ export interface Database {
         Args: Record<string, never>;
         Returns: boolean;
       };
+      save_store_configuration: {
+        Args: {
+          p_settings: Json;
+          p_business_hours: Json;
+          p_promotions: Json;
+          p_add_ons: Json;
+          p_flavors: Json;
+        };
+        Returns: undefined;
+      };
       update_order_status: {
         Args: {
           p_order_id: string;
@@ -270,6 +280,7 @@ export type DatabaseStoreSettings = {
   id: boolean;
   delivery_open: boolean;
   pause_online_orders: boolean;
+  temporary_pause: boolean;
   closed_today: boolean;
   closed_message: string;
   allow_pickup: boolean;
@@ -277,6 +288,7 @@ export type DatabaseStoreSettings = {
   delivery_fee: PostgresNumeric;
   minimum_order: PostgresNumeric;
   free_add_ons_quantity: number;
+  accepted_payment_methods: DatabasePaymentMethod[];
   pix_key: string;
   payment_note: string;
   whatsapp: string;
@@ -299,12 +311,15 @@ export type DatabaseStoreSettingsUpdate = Partial<DatabaseStoreSettingsInsert>;
 export type DatabasePublicStoreSettings = {
   delivery_open: boolean;
   pause_online_orders: boolean;
+  temporary_pause: boolean;
   closed_today: boolean;
   closed_message: string;
   allow_pickup: boolean;
   allow_delivery: boolean;
   delivery_fee: PostgresNumeric;
   minimum_order: PostgresNumeric;
+  free_add_ons_quantity: number;
+  accepted_payment_methods: DatabasePaymentMethod[];
   whatsapp: string;
   instagram: string;
   address: string;

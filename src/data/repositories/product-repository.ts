@@ -7,6 +7,7 @@ export interface ProductRepository {
   create(product: Omit<Product, "id" | "createdAt" | "updatedAt">): Promise<RepositoryResult<Product>>;
   update(id: string, patch: Partial<Omit<Product, "id" | "createdAt" | "updatedAt">>): Promise<RepositoryResult<Product>>;
   changeAvailability(id: string, availableToday: boolean): Promise<RepositoryResult<Product>>;
+  delete(id: string): Promise<RepositoryResult<null>>;
 }
 
 export function createProductRepository(client: RepositoryClient): ProductRepository {
@@ -47,6 +48,11 @@ export function createProductRepository(client: RepositoryClient): ProductReposi
 
     async changeAvailability(id, availableToday) {
       return this.update(id, { availableToday });
+    },
+
+    async delete(id) {
+      const { error } = await client.from("products").delete().eq("id", id);
+      return error ? fail(error) : ok(null);
     },
   };
 }

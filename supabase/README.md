@@ -35,6 +35,7 @@ Copie `.env.example` para `.env.local`:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-anon
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 SUPABASE_SERVICE_ROLE_KEY=sua-chave-service-role
 ```
 
@@ -51,7 +52,7 @@ insert into public.profiles (id, name, role, active)
 values ('UUID_DO_AUTH_USER', 'Nome do responsável', 'owner', true);
 ```
 
-Depois disso, o owner pode gerenciar outros perfis pela aplicação quando essa tela for integrada.
+Nesta etapa, o sistema aceita somente um perfil `owner` ativo e não possui gestão de usuários pela interface.
 
 ## Gerar tipos Supabase
 
@@ -83,7 +84,7 @@ Todas as tabelas públicas estão com RLS ativada.
 - Público anônimo não lista pedidos, não consulta clientes e não altera dados.
 - Usuários internos ativos leem dados operacionais.
 - Attendants criam pedidos internos e atualizam status/pagamento apenas por RPCs específicas.
-- Owners gerenciam produtos, configurações, promoções, adicionais, sabores e perfis.
+- Owners gerenciam produtos, configurações, promoções, adicionais e sabores. A gestão de perfis permanece apenas administrativa nesta etapa.
 
 ## Próximos passos
 
@@ -93,3 +94,15 @@ Todas as tabelas públicas estão com RLS ativada.
 - Conectar gradualmente as telas aos repositórios em `src/data/repositories`.
 - Adicionar testes automatizados para mappers e operações críticas quando a infraestrutura de testes for escolhida.
 - Implementar Realtime e impressão em tarefas separadas.
+
+## Integração atual da aplicação
+
+Nesta versão existe somente um usuário `owner` e não há gestão de usuários. Crie o usuário em **Authentication > Users** e associe o UUID em `public.profiles` com o SQL administrativo acima. Nunca eleve privilégios automaticamente pelo navegador.
+
+Configure a **Site URL** e autorize `/auth/callback` nas **Redirect URLs** para o endereço local e o domínio de produção. O callback troca o código PKCE por uma sessão antes de encaminhar de `/recuperar-senha` para `/redefinir-senha`.
+
+As rotas internas são protegidas por `src/proxy.ts`, que atualiza cookies e exige profile `owner` ativo. A autenticação comum usa somente a anon key; a service role permanece exclusiva do servidor.
+
+Supabase é a fonte de verdade para autenticação, profiles, produtos, configurações, horários, promoções, adicionais e sabores. Pedidos, acompanhamento, filas, fechamento e impressão continuam no `localStorage` nesta etapa.
+
+O salvamento da tela de configurações usa a RPC `save_store_configuration`, criada pela migration `202607140002_atomic_store_configuration.sql`, para persistir configurações, horários, promoções, adicionais e sabores em uma única transação.

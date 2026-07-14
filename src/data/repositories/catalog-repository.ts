@@ -50,10 +50,14 @@ export function createCatalogRepository(client: RepositoryClient): CatalogReposi
       if (flavorsResult.error) return fail(flavorsResult.error);
 
       const flavors = (flavorsResult.data ?? []).map(mapFlavorFromDatabase);
+      const now = Date.now();
 
       return ok({
         products: (productsResult.data ?? []).map(mapProductFromDatabase),
-        promotions: (promotionsResult.data ?? []).map(mapPromotionFromDatabase),
+        promotions: (promotionsResult.data ?? [])
+          .map(mapPromotionFromDatabase)
+          .filter((promotion) => (!promotion.validFrom || new Date(promotion.validFrom).getTime() <= now)
+            && (!promotion.validUntil || new Date(promotion.validUntil).getTime() >= now)),
         addOns: (addOnsResult.data ?? []).map(mapAddOnFromDatabase),
         iceCreamFlavors: flavors.filter((flavor) => flavor.productType === "ice_cream"),
         milkshakeFlavors: flavors.filter((flavor) => flavor.productType === "milkshake"),

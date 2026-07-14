@@ -13,7 +13,8 @@ export function MobileLandingNav() {
     && promotion.featuredOnHome
     && promotion.title.trim()
     && promotion.price > 0
-    && (!promotion.validUntil || promotion.validUntil >= today),
+    && (!promotion.validFrom || promotion.validFrom.slice(0, 10) <= today)
+    && (!promotion.validUntil || promotion.validUntil.slice(0, 10) >= today),
   );
   return (
     <nav className="mobile-landing-nav" aria-label="Ações principais">

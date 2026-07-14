@@ -15,10 +15,10 @@ type Kind = "acai" | "icecream" | "milkshake" | "promo";
 type CartItem = { id: string; productId: string; name: string; detail: string; price: number; quantity: number };
 type Customer = { name: string; phone: string; deliveryType: "pickup" | "delivery" | ""; address: string; payment: PaymentMethod | ""; notes: string };
 type SetText = (value: string) => void;
+const freeAddOnsLabel = (quantity: number) => `${quantity} ${quantity === 1 ? "adicional grátis" : "adicionais grátis"}`;
 type CheckoutStage = "review" | "delivery" | "address" | "name" | "phone" | "payment" | "note" | "confirm";
 
 const sizes = [{ name: "300 ml", price: 14 }, { name: "500 ml", price: 19 }, { name: "700 ml", price: 25 }, { name: "1 litro", price: 34 }];
-const FREE_ACAI_EXTRAS = 3;
 const formats = [{ name: "Copo", price: 0 }, { name: "Casquinha", price: 0 }];
 const scoops = [{ name: "1 bola", price: 7, max: 1 }, { name: "2 bolas", price: 12, max: 2 }, { name: "3 bolas", price: 16, max: 3 }];
 const iceExtras = ["Chocolate", "Morango", "Leite condensado", "Granulado", "Sem cobertura"];
@@ -41,15 +41,17 @@ export function DeliveryBuilder() {
   const deliveryFee = customer.deliveryType === "delivery" ? settings.delivery.fee : 0;
   const total = subtotal + deliveryFee;
   const availability = getStoreAvailability(settings, availabilityNow);
-  const extras = settings.acaiExtras.filter((item) => item.available && item.name.trim());
-  const flavors = settings.iceCreamFlavors.filter((item) => item.available && item.name.trim());
-  const shakeFlavors = settings.milkshakeFlavors.filter((item) => item.available && item.name.trim());
+  const freeAcaiExtras = settings.delivery.freeAddOnsQuantity;
+  const extras = settings.acaiExtras.filter((item) => item.active !== false && item.available && item.name.trim());
+  const flavors = settings.iceCreamFlavors.filter((item) => item.active !== false && item.available && item.name.trim());
+  const shakeFlavors = settings.milkshakeFlavors.filter((item) => item.active !== false && item.available && item.name.trim());
   const today = toDateInput(new Date());
   const promotions = settings.promotions.filter((promotion) =>
     promotion.active
     && promotion.title.trim()
     && promotion.price > 0
-    && (!promotion.validUntil || promotion.validUntil >= today),
+    && (!promotion.validFrom || promotion.validFrom.slice(0, 10) <= today)
+    && (!promotion.validUntil || promotion.validUntil.slice(0, 10) >= today),
   );
   const acceptedPayments = (Object.keys(settings.payments.accepted) as PaymentMethod[])
     .filter((method) => settings.payments.accepted[method]);
@@ -61,9 +63,9 @@ export function DeliveryBuilder() {
     return () => window.clearInterval(timer);
   }, []);
   const itemPrice = useMemo(() => kind === "acai"
-    ? (sizes.find(x => x.name === size)?.price || 0) + selectedExtras.slice(FREE_ACAI_EXTRAS).reduce((sum, name) => sum + (extras.find(x => x.name === name)?.extraPrice || 0), 0)
+    ? (sizes.find(x => x.name === size)?.price || 0) + selectedExtras.slice(freeAcaiExtras).reduce((sum, name) => sum + (extras.find(x => x.name === name)?.extraPrice || 0), 0)
     : kind === "milkshake" ? (shakeSizes.find(x => x.name === shakeSize)?.price || 0)
-    : (scoops.find(x => x.name === scoop)?.price || 0) + (formats.find(x => x.name === format)?.price || 0), [kind, size, selectedExtras, scoop, format, shakeSize, extras]);
+    : (scoops.find(x => x.name === scoop)?.price || 0) + (formats.find(x => x.name === format)?.price || 0), [kind, size, selectedExtras, scoop, format, shakeSize, extras, freeAcaiExtras]);
   const reset = () => { setKind(null); setStep(0); setSize(""); setSelectedExtras([]); setAcaiNote(""); setFormat(""); setScoop(""); setSelectedFlavors([]); setIceExtra(""); setShakeSize(""); setShakeFlavor(""); setShakeNote(""); setError(""); };
   const canAdvance = kind === "acai" ? [!!size, true, true][step] : kind === "icecream" ? [!!format, !!scoop, selectedFlavors.length > 0, !!iceExtra][step] : kind === "milkshake" ? [!!shakeSize, !!shakeFlavor, true][step] : true;
   const selectFlavor = (name: string) => {
@@ -73,8 +75,8 @@ export function DeliveryBuilder() {
   const addBuilt = () => {
     const isAcai = kind === "acai"; const isShake = kind === "milkshake";
     const name = isAcai ? `Açaí ${size}` : isShake ? `Milk-shake ${shakeSize} — ${shakeFlavor}` : `Sorvete ${format.toLowerCase()} · ${scoop}`;
-    const included = selectedExtras.slice(0, FREE_ACAI_EXTRAS);
-    const paid = selectedExtras.slice(FREE_ACAI_EXTRAS);
+    const included = selectedExtras.slice(0, freeAcaiExtras);
+    const paid = selectedExtras.slice(freeAcaiExtras);
     const detail = isAcai ? [
       included.length ? `Adicionais inclusos: ${included.join(", ")}` : "Sem adicionais",
       paid.length ? `Adicionais pagos: ${paid.join(", ")}` : "",
@@ -95,7 +97,8 @@ export function DeliveryBuilder() {
       : !isValidPhone(customer.phone) ? "Informe um telefone válido com DDD."
       : !customer.payment ? "Escolha uma forma de pagamento."
       : !acceptedPayments.includes(customer.payment as PaymentMethod) ? "A forma de pagamento escolhida não está disponível."
-      : !cart.length ? "Adicione pelo menos um item ao pedido." : "";
+      : !cart.length ? "Adicione pelo menos um item ao pedido."
+      : subtotal < settings.delivery.minimumOrder ? `O pedido mínimo é de ${formatCurrency(settings.delivery.minimumOrder)}.` : "";
     if (validation) return setError(validation);
     const id = addOrder({ customerName: customer.name.trim(), phone: customer.phone.trim(), items: cart.map(item => ({ id: item.id, productId: item.productId, productName: `${item.name} — ${item.detail}`, quantity: item.quantity, unitPrice: item.price })), notes: customer.notes.trim() || undefined, paymentMethod: customer.payment as PaymentMethod, paymentStatus: "pending", orderStatus: "new", status: "pending_payment", total, origin: "delivery", deliveryType: customer.deliveryType as "pickup" | "delivery", deliveryFee: customer.deliveryType === "delivery" ? deliveryFee : 0, address: customer.deliveryType === "delivery" ? customer.address.trim() : undefined });
     setOrderId(id);
@@ -104,31 +107,31 @@ export function DeliveryBuilder() {
 
   return <main className="delivery-page min-h-screen bg-[#fbf7f0] text-[#190620]">
     <header className="sticky top-0 z-40 border-b border-[#3a0a4d]/10 bg-[#fbf7f0]/90 backdrop-blur-xl"><div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4 md:h-20 md:px-8"><div className="flex min-w-0 items-center gap-2.5"><Link href="/" aria-label="Voltar para a página inicial"><BrandLogo compact /></Link><span aria-label={availability.message} title={availability.message} className={`inline-flex min-h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[10px] font-extrabold uppercase tracking-[.08em] ${availability.acceptingOrders ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}><i className={`h-1.5 w-1.5 rounded-full ${availability.acceptingOrders ? "bg-emerald-500" : "bg-amber-500"}`} />{availability.acceptingOrders ? "Aberto" : "Pausado"}</span></div><button onClick={() => { if (cart.length) { setKind("promo"); setStep(1); } }} className="flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-[#3a0a4d] px-3.5 text-sm font-bold text-white"><ShoppingBag size={18} /> {formatCurrency(total)}{cart.length > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#f8b900] px-1 text-[11px] text-[#24002f]">{cart.length}</span>}</button></div></header>
-    {!kind ? <Start choose={setKind} cart={cart} checkout={() => { setKind("promo"); setStep(1); }} availability={availability} hasPromotions={promotions.length > 0} /> :
+    {!kind ? <Start choose={setKind} cart={cart} checkout={() => { setKind("promo"); setStep(1); }} availability={availability} hasPromotions={promotions.length > 0} freeAddOns={freeAcaiExtras} /> :
       <div className="mx-auto max-w-6xl px-4 pb-32 pt-5 md:px-8 md:pt-8">
         {(building || step === 0) && <div className="mb-5 flex items-center justify-between"><button onClick={() => step === 0 ? reset() : setStep(x => x - 1)} className="flex min-h-11 items-center gap-1 text-sm font-bold text-[#4a0b63]"><ChevronLeft size={20} /> Voltar</button>{building && <div className="flex gap-2" aria-label={`Etapa ${step + 1} de ${stepCount}`}>{Array.from({ length: stepCount }).map((_, i) => <span key={i} className={`h-2 rounded-full transition-all ${i <= step ? "w-7 bg-[#c83d76]" : "w-2 bg-[#dfd3df]"}`} />)}</div>}<span className="text-xs font-bold uppercase tracking-[.12em] text-[#7b6b7d]">{building ? `${step + 1}/${stepCount}` : "Promoções"}</span></div>}
-        {building ? <div className="grid gap-6 md:grid-cols-[.9fr_1.1fr] md:items-start lg:gap-12"><div className="md:sticky md:top-28"><Preview kind={kind} format={format} scoop={scoop} shakeSize={shakeSize} flavors={selectedFlavors} extras={selectedExtras} topping={kind === "milkshake" ? shakeFlavor : iceExtra} flavorColors={flavorColors} /><p className="mt-3 text-center text-sm font-bold text-[#4a0b63]">{itemPrice ? formatCurrency(itemPrice) : "Monte do seu jeito"}</p></div><section className="rounded-[28px] border border-[#eadfea] bg-white p-5 shadow-[0_20px_70px_rgba(50,8,65,.08)] md:p-8">{kind === "acai" ? <AcaiStep step={step} size={size} setSize={setSize} selected={selectedExtras} toggle={name => setSelectedExtras(current => current.includes(name) ? current.filter(x => x !== name) : [...current, name])} note={acaiNote} setNote={setAcaiNote} extras={extras} /> : kind === "milkshake" ? <ShakeStep step={step} size={shakeSize} setSize={setShakeSize} flavor={shakeFlavor} setFlavor={setShakeFlavor} note={shakeNote} setNote={setShakeNote} flavors={shakeFlavors} /> : <IceStep step={step} format={format} setFormat={setFormat} scoop={scoop} setScoop={value => { setScoop(value); setSelectedFlavors([]); }} selected={selectedFlavors} select={selectFlavor} extra={iceExtra} setExtra={setIceExtra} flavors={flavors} />}</section></div>
+        {building ? <div className="grid gap-6 md:grid-cols-[.9fr_1.1fr] md:items-start lg:gap-12"><div className="md:sticky md:top-28"><Preview kind={kind} format={format} scoop={scoop} shakeSize={shakeSize} flavors={selectedFlavors} extras={selectedExtras} topping={kind === "milkshake" ? shakeFlavor : iceExtra} flavorColors={flavorColors} /><p className="mt-3 text-center text-sm font-bold text-[#4a0b63]">{itemPrice ? formatCurrency(itemPrice) : "Monte do seu jeito"}</p></div><section className="rounded-[28px] border border-[#eadfea] bg-white p-5 shadow-[0_20px_70px_rgba(50,8,65,.08)] md:p-8">{kind === "acai" ? <AcaiStep step={step} size={size} setSize={setSize} selected={selectedExtras} toggle={name => setSelectedExtras(current => current.includes(name) ? current.filter(x => x !== name) : [...current, name])} note={acaiNote} setNote={setAcaiNote} extras={extras} freeAddOns={freeAcaiExtras} /> : kind === "milkshake" ? <ShakeStep step={step} size={shakeSize} setSize={setShakeSize} flavor={shakeFlavor} setFlavor={setShakeFlavor} note={shakeNote} setNote={setShakeNote} flavors={shakeFlavors} /> : <IceStep step={step} format={format} setFormat={setFormat} scoop={scoop} setScoop={value => { setScoop(value); setSelectedFlavors([]); }} selected={selectedFlavors} select={selectFlavor} extra={iceExtra} setExtra={setIceExtra} flavors={flavors} />}</section></div>
           : step === 0 ? <Promotions promotions={promotions} add={promo => { setCart(current => [...current, { id: uid(), productId: promo.id, name: promo.title, detail: promo.description, price: promo.price, quantity: 1 }]); setStep(1); }} /> : <Checkout cart={cart} setCart={setCart} customer={customer} setCustomer={setCustomer} error={error} submit={submit} addMore={reset} deliveryFee={deliveryFee} acceptedPayments={acceptedPayments} settings={settings} canSubmit={availability.acceptingOrders} availabilityMessage={availability.message} />}
       </div>}
     {building && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#3a0a4d]/10 bg-[#fffaf4]/95 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl"><button disabled={!canAdvance} onClick={() => step < stepCount - 1 ? setStep(x => x + 1) : addBuilt()} className="mx-auto flex min-h-14 w-full max-w-xl items-center justify-center gap-2 rounded-2xl bg-[#f8b900] px-5 font-extrabold text-[#24002f] shadow-lg disabled:opacity-40">{step === stepCount - 1 ? <><Plus size={20} /> Adicionar ao pedido</> : <>Continuar <ArrowRight size={19} /></>}</button></div>}
   </main>;
 }
 
-function Start({ choose, cart, checkout, availability, hasPromotions }: { choose: (kind: Kind) => void; cart: CartItem[]; checkout: () => void; availability: ReturnType<typeof getStoreAvailability>; hasPromotions: boolean }) {
+function Start({ choose, cart, checkout, availability, hasPromotions, freeAddOns }: { choose: (kind: Kind) => void; cart: CartItem[]; checkout: () => void; availability: ReturnType<typeof getStoreAvailability>; hasPromotions: boolean; freeAddOns: number }) {
   return <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 md:px-8 md:pt-10"><div className="max-w-2xl"><span className="inline-flex items-center gap-2 rounded-full bg-[#f1e4f1] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.12em] text-[#6a2478] md:text-xs"><Sparkles size={13} /> Feito por você</span><h1 className="mt-3 text-[2rem] font-extrabold leading-[1.02] tracking-[-.055em] text-[#24002f] min-[390px]:text-4xl md:mt-5 md:text-6xl">O que você quer pedir?</h1><p className="mt-2 max-w-lg text-sm leading-relaxed text-[#706273] md:mt-4 md:text-base">Monte cada detalhe e envie o pedido direto para a equipe da Manu.</p>{!availability.acceptingOrders && <p className="mt-3 flex max-w-xl items-start gap-2 text-xs font-semibold leading-relaxed text-amber-800"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />{availability.message}</p>}</div>
     {cart.length > 0 && <button onClick={checkout} className="mt-4 flex min-h-13 w-full items-center justify-between rounded-2xl bg-[#24002f] px-5 font-bold text-white md:mt-6 md:max-w-md"><span>{cart.length} {cart.length === 1 ? "item no pedido" : "itens no pedido"}</span><span className="flex items-center gap-2 text-[#f8b900]">Finalizar <ArrowRight size={18} /></span></button>}
-    <div className="mt-5 grid grid-cols-2 gap-3 md:mt-9 md:gap-4 lg:grid-cols-4"><Choice title="Montar açaí" text="Tamanho e até 3 adicionais grátis." color="bg-[#4a0b63]" icon={<span className="delivery-mini-bowl" />} action={() => choose("acai")} /><Choice title="Montar sorvete" text="Tipo, bolas e sabores." color="bg-[#c83d76]" icon={<IceCreamBowl size={32} className="md:h-10 md:w-10" />} action={() => choose("icecream")} /><Choice title="Milk-shake" text="Tamanho e sabor favorito." color="bg-[#8b573e]" icon={<span className="delivery-mini-shake" />} action={() => choose("milkshake")} />{hasPromotions && <Choice title="Promoções" text="Combinações prontas para pedir." color="bg-[#e89e00]" icon={<PackageCheck size={32} className="md:h-10 md:w-10" />} action={() => choose("promo")} />}</div>
+    <div className="mt-5 grid grid-cols-2 gap-3 md:mt-9 md:gap-4 lg:grid-cols-4"><Choice title="Montar açaí" text={`Tamanho e até ${freeAddOnsLabel(freeAddOns)}.`} color="bg-[#4a0b63]" icon={<span className="delivery-mini-bowl" />} action={() => choose("acai")} /><Choice title="Montar sorvete" text="Tipo, bolas e sabores." color="bg-[#c83d76]" icon={<IceCreamBowl size={32} className="md:h-10 md:w-10" />} action={() => choose("icecream")} /><Choice title="Milk-shake" text="Tamanho e sabor favorito." color="bg-[#8b573e]" icon={<span className="delivery-mini-shake" />} action={() => choose("milkshake")} />{hasPromotions && <Choice title="Promoções" text="Combinações prontas para pedir." color="bg-[#e89e00]" icon={<PackageCheck size={32} className="md:h-10 md:w-10" />} action={() => choose("promo")} />}</div>
     <div className="mt-10 flex items-center gap-3 border-t border-[#e9dde8] pt-6 text-sm text-[#706273]"><CheckCircle2 className="text-[#c83d76]" size={20} />Pedido simples, rápido e enviado direto para a equipe.</div></div>;
 }
 function Choice({ title, text, color, icon, action }: { title: string; text: string; color: string; icon: React.ReactNode; action: () => void }) { return <button onClick={action} className="group relative min-h-44 overflow-hidden rounded-[22px] border border-[#eadfea] bg-white p-4 text-left shadow-[0_12px_38px_rgba(50,8,65,.06)] transition hover:-translate-y-1 md:min-h-52 md:rounded-[28px] md:p-6 md:shadow-[0_18px_55px_rgba(50,8,65,.07)]"><span className={`grid h-12 w-12 place-items-center rounded-xl text-white md:h-16 md:w-16 md:rounded-2xl ${color}`}>{icon}</span><h2 className="mt-4 text-base font-extrabold leading-tight tracking-[-.03em] md:mt-6 md:text-xl">{title}</h2><p className="mt-1.5 pr-3 text-xs leading-relaxed text-[#776a79] md:mt-2 md:pr-8 md:text-sm">{text}</p><ArrowRight className="absolute bottom-4 right-4 text-[#c83d76] md:bottom-6 md:right-6" size={18} /></button>; }
 function Heading({ title, text }: { title: string; text: string }) { return <div className="mb-6"><h2 className="text-2xl font-extrabold tracking-[-.04em] text-[#24002f]">{title}</h2><p className="mt-2 text-sm leading-relaxed text-[#756878]">{text}</p></div>; }
 function Options({ values, selected, choose }: { values: { label: string; sub?: string }[]; selected: string | string[]; choose: SetText }) { return <div className="grid grid-cols-2 gap-3">{values.map(x => { const active = Array.isArray(selected) ? selected.includes(x.label) : selected === x.label; return <button key={x.label} onClick={() => choose(x.label)} className={`relative min-h-20 rounded-2xl border p-4 text-left transition ${active ? "border-[#6d2779] bg-[#f4eaf4] shadow-[inset_0_0_0_1px_#6d2779]" : "border-[#eadfea] bg-[#fffdfb]"}`}><span className="block text-sm font-extrabold">{x.label}</span>{x.sub && <span className="mt-1 block text-xs text-[#817284]">{x.sub}</span>}{active && <span className="absolute right-3 top-3 grid h-5 w-5 place-items-center rounded-full bg-[#6d2779] text-white"><Check size={12} /></span>}</button>; })}</div>; }
 
-function AcaiStep({ step, size, setSize, selected, toggle, note, setNote, extras }: { step: number; size: string; setSize: SetText; selected: string[]; toggle: SetText; note: string; setNote: SetText; extras: ConfigurableItem[] }) {
+function AcaiStep({ step, size, setSize, selected, toggle, note, setNote, extras, freeAddOns }: { step: number; size: string; setSize: SetText; selected: string[]; toggle: SetText; note: string; setNote: SetText; extras: ConfigurableItem[]; freeAddOns: number }) {
   if (step === 0) return <><Heading title="Escolha o tamanho" text="Comece pelo tamanho da sua vontade." /><Options values={sizes.map(x => ({ label: x.name, sub: formatCurrency(x.price) }))} selected={size} choose={setSize} /></>;
   if (step === 1) {
-    const paid = Math.max(0, selected.length - FREE_ACAI_EXTRAS);
-    return <><Heading title="Escolha até 3 adicionais grátis" text="A partir do 4º adicional, o valor de cada item é acrescentado ao total." /><div className={`mb-4 rounded-2xl p-4 text-sm font-bold ${paid ? "bg-[#fff3dc] text-[#805315]" : "bg-[#f4eaf4] text-[#5d2468]"}`}><span>{Math.min(selected.length, FREE_ACAI_EXTRAS)} de {FREE_ACAI_EXTRAS} grátis selecionados</span>{paid > 0 && <span className="mt-1 block">{paid} {paid === 1 ? "adicional pago" : "adicionais pagos"}</span>}</div><Options values={extras.map((x) => ({ label: x.name, sub: selected.includes(x.name) && selected.indexOf(x.name) >= FREE_ACAI_EXTRAS ? `Pago: ${formatCurrency(x.extraPrice ?? 0)}` : `Após o 3º: ${formatCurrency(x.extraPrice ?? 0)}` }))} selected={selected} choose={toggle} /></>;
+    const paid = Math.max(0, selected.length - freeAddOns);
+    return <><Heading title={`Escolha até ${freeAddOnsLabel(freeAddOns)}`} text={`A partir do ${freeAddOns + 1}º adicional, o valor de cada item é acrescentado ao total.`} /><div className={`mb-4 rounded-2xl p-4 text-sm font-bold ${paid ? "bg-[#fff3dc] text-[#805315]" : "bg-[#f4eaf4] text-[#5d2468]"}`}><span>{Math.min(selected.length, freeAddOns)} de {freeAddOns} grátis {freeAddOns === 1 ? "selecionado" : "selecionados"}</span>{paid > 0 && <span className="mt-1 block">{paid} {paid === 1 ? "adicional pago" : "adicionais pagos"}</span>}</div><Options values={extras.map((x) => ({ label: x.name, sub: selected.includes(x.name) && selected.indexOf(x.name) >= freeAddOns ? `Pago: ${formatCurrency(x.extraPrice ?? 0)}` : `Após o ${freeAddOns}º: ${formatCurrency(x.extraPrice ?? 0)}` }))} selected={selected} choose={toggle} /></>;
   }
   return <><Heading title="Alguma observação?" text="Este campo é opcional." /><label className="grid gap-2 text-sm font-bold">Observação<textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Ex.: pouco leite condensado, sem colher..." rows={4} className="rounded-2xl border border-[#dfd2df] p-4 font-normal outline-none focus:border-[#6d2779]" /></label></>;
 }
