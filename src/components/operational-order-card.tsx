@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChefHat,
   Clock3,
+  CircleAlert,
   ExternalLink,
   MapPin,
   MessageCircle,
@@ -19,11 +20,9 @@ import { useOrders } from "@/components/orders-provider";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/status-badge";
 import { Button, Card } from "@/components/ui";
 import {
-  getOperationalTaskLabel,
   getOrderAgeLabel,
-  getOrderChecklist,
   getOrderIssues,
-  splitOrderItemName,
+  getOrderItemDetails,
 } from "@/lib/order-operational";
 import { Order } from "@/lib/types";
 import { formatCurrency, formatTime } from "@/lib/utils";
@@ -72,11 +71,12 @@ function actionLabelFor(order: Order) {
   return nextAction[order.orderStatus as keyof typeof nextAction]?.label;
 }
 
-function queuePriority(order: Order, context: QueueContext) {
-  if (context === "collect") return `${formatCurrency(order.total)} pendente`;
-  if (context === "deliver") return order.deliveryType === "delivery" ? "Entrega" : "Retirada";
-  if (context === "prepare") return order.items.length === 1 ? "1 item" : `${order.items.length} itens`;
-  return getOperationalTaskLabel(order, context);
+function currentOperationLabel(order: Order) {
+  if (order.orderStatus === "new") return "Novo pedido";
+  if (order.orderStatus === "preparing") return "Em preparo";
+  if (order.orderStatus === "ready") return order.deliveryType === "delivery" ? "Pronto para entrega" : "Pronto para retirada";
+  if (order.orderStatus === "delivered") return order.deliveryType === "delivery" ? "Entregue" : "Retirado";
+  return "Cancelado";
 }
 
 function InfoLine({ icon: Icon, children }: { icon: typeof Store; children: React.ReactNode }) {
@@ -99,14 +99,13 @@ export function OperationalOrderCard({
   compact?: boolean;
   context?: QueueContext;
 }) {
-  const { updateOperationalStatus, updatePaymentStatus, actioningOrderId } = useOrders();
+  const { updateOperationalStatus, updatePaymentStatus, actioningOrderId, currentTime } = useOrders();
   const busy = actioningOrderId === order.id;
   const action = order.orderStatus in nextAction
     ? nextAction[order.orderStatus as keyof typeof nextAction]
     : null;
   const styles = contextStyles[context];
   const issues = getOrderIssues(order);
-  const checklist = getOrderChecklist(order);
   const origin = order.origin === "delivery" ? "Pedido online" : "Balcão";
   const delivery = order.deliveryType === "delivery" ? "Entrega" : "Retirada";
   const showPaymentAction = order.paymentStatus === "pending" && (focus === "payment" || focus === "all" || context === "collect");
@@ -114,8 +113,10 @@ export function OperationalOrderCard({
   const actionLabel = actionLabelFor(order);
   const primaryIsPayment = context === "collect" || (showPaymentAction && !showOperation);
   const hasPrimary = order.orderStatus !== "canceled" && (primaryIsPayment || showOperation);
+  const nextStepLabel = primaryIsPayment ? "Receber pagamento" : actionLabel;
   const mainItems = compact ? order.items.slice(0, 2) : order.items.slice(0, 3);
   const ActionIcon = action?.icon;
+  const currentOperation = currentOperationLabel(order);
 
   return (
     <Card className={`internal-order-card min-w-0 ${styles.soft} ${compact ? "p-3 pl-5" : "p-3 pl-5 md:p-4 md:pl-6"}`}>
@@ -124,10 +125,13 @@ export function OperationalOrderCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className={`rounded-lg px-2 py-1 text-[11px] font-extrabold ${styles.pill}`}>#{order.id.slice(0, 6).toUpperCase()}</span>
-            <span className="rounded-lg bg-white/80 px-2 py-1 text-[11px] font-bold text-slate-500">{getOrderAgeLabel(order)}</span>
+            <span className="rounded-lg bg-white/80 px-2 py-1 text-[11px] font-bold text-slate-500">{getOrderAgeLabel(order, currentTime)}</span>
           </div>
           <h3 className="mt-2 truncate text-base font-extrabold leading-tight text-[var(--text)]">{order.customerName || "Cliente não informado"}</h3>
-          <p className={`mt-0.5 text-xs font-extrabold ${styles.accent}`}>{getOperationalTaskLabel(order, context)} · {queuePriority(order, context)}</p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold">
+            <span className={styles.accent}>{currentOperation}</span>
+            {nextStepLabel && <span className="text-slate-500">Próxima ação: {nextStepLabel}</span>}
+          </div>
         </div>
         <div className="shrink-0 text-right">
           <p className="text-[10px] font-bold uppercase text-slate-400">Total</p>
@@ -138,7 +142,7 @@ export function OperationalOrderCard({
       <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         <InfoLine icon={order.origin === "delivery" ? Truck : Store}>{origin}</InfoLine>
         <InfoLine icon={order.deliveryType === "delivery" ? MapPin : PackageCheck}>{delivery}</InfoLine>
-        <InfoLine icon={ReceiptText}>{paymentLabels[order.paymentMethod]}</InfoLine>
+        <InfoLine icon={ReceiptText}>Pagamento: {paymentLabels[order.paymentMethod]}</InfoLine>
         <InfoLine icon={Clock3}>Chegou às {formatTime(order.createdAt)}</InfoLine>
       </div>
 
@@ -151,20 +155,20 @@ export function OperationalOrderCard({
 
       <div className="mt-3 rounded-xl border border-white/80 bg-white/85 p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="text-xs font-extrabold text-slate-700">{context === "deliver" ? "Pedido pronto" : context === "collect" ? "Dados para cobrança" : "Itens para preparar"}</p>
+          <p className="text-xs font-extrabold text-slate-700">{context === "deliver" ? "O que será entregue" : context === "collect" ? "Resumo para cobrança" : "O que preparar agora"}</p>
           <span className="text-[10px] font-bold text-slate-400">{order.items.length} {order.items.length === 1 ? "item" : "itens"}</span>
         </div>
         {mainItems.length ? (
           <div className="grid gap-2">
             {mainItems.map((item) => {
-              const parsed = splitOrderItemName(item.productName);
+              const details = getOrderItemDetails(item);
               return (
                 <div key={item.id} className="min-w-0">
                   <div className="flex items-start justify-between gap-2 text-sm">
-                    <p className="min-w-0 font-extrabold text-[var(--text)]"><span className={styles.accent}>{item.quantity}×</span> {parsed.title}</p>
+                    <p className="min-w-0 font-extrabold text-[var(--text)]"><span className={styles.accent}>{item.quantity}×</span> {item.productName.split(/\s(?:—|-|·)\s/)[0]}</p>
                     {context === "collect" && <span className="shrink-0 font-bold text-slate-600">{formatCurrency(item.quantity * item.unitPrice)}</span>}
                   </div>
-                  {parsed.details.length > 0 && <p className="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{parsed.details.join(" · ")}</p>}
+                  {details.length > 0 && <ul className="mt-1 grid gap-0.5 text-[11px] font-semibold leading-relaxed text-slate-600">{details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}
                 </div>
               );
             })}
@@ -174,14 +178,13 @@ export function OperationalOrderCard({
           <p className="text-sm font-bold text-amber-800">Pedido sem itens.</p>
         )}
         {order.notes?.trim() && (
-          <p className="mt-3 rounded-lg bg-[#fff7e6] px-2.5 py-2 text-[11px] font-bold leading-relaxed text-[#865900]">Observação: {order.notes}</p>
+          <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-[#fff7e6] px-2.5 py-2 text-[11px] font-bold leading-relaxed text-[#865900]"><CircleAlert className="mt-0.5 shrink-0" size={14} /> <span><strong>Atenção:</strong> {order.notes}</span></p>
         )}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <PaymentStatusBadge status={order.paymentStatus} />
+        <PaymentStatusBadge status={order.paymentStatus} contextual />
         <OrderStatusBadge status={order.orderStatus} />
-        {order.paymentStatus === "pending" && <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold text-amber-800">Pagamento pendente</span>}
       </div>
 
       {issues.length > 0 && (
@@ -189,16 +192,6 @@ export function OperationalOrderCard({
           {issues.slice(0, 4).map((issue) => (
             <span key={issue.label} className={`rounded-lg border px-2 py-1 text-[10px] font-extrabold ${issue.tone === "danger" ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
               {issue.label}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {!compact && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {checklist.slice(0, 5).map((item) => (
-            <span key={item.label} className={`rounded-lg px-2 py-1 text-[10px] font-bold ${item.ok ? item.tone === "neutral" ? "bg-violet-50 text-[#6d2779]" : "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
-              {item.label}
             </span>
           ))}
         </div>
@@ -219,7 +212,7 @@ export function OperationalOrderCard({
           )}
           {showPaymentAction && !primaryIsPayment && (
             <Button disabled={busy} variant="secondary" className="min-h-12 px-3" onClick={() => void updatePaymentStatus(order.id, "paid")}>
-              <Banknote size={16} /> Receber
+              <Banknote size={16} /> <span className="sm:hidden">Receber</span><span className="hidden sm:inline">Marcar como pago</span>
             </Button>
           )}
           <Link href={`/pedidos/${order.id}`} className={!hasPrimary && !showPaymentAction ? "min-[390px]:col-span-2" : ""}>

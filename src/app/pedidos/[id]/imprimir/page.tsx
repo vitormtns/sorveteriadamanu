@@ -8,6 +8,7 @@ import { useOrders } from "@/components/orders-provider";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { formatPublicOrderCode } from "@/lib/order-code";
 import { paymentLabels } from "@/lib/settings";
+import { getOrderItemDetails } from "@/lib/order-operational";
 
 export default function PrintOrderPage() {
   const { id } = useParams<{ id: string }>();
@@ -80,6 +81,7 @@ export default function PrintOrderPage() {
                   <strong>{formatCurrency(item.quantity * item.unitPrice)}</strong>
                 </div>
                 <p className="mt-0.5 text-[9px]">{formatCurrency(item.unitPrice)} cada</p>
+                {getOrderItemDetails(item).map((detail) => <p key={detail} className="mt-0.5 break-words text-[9px]">{detail}</p>)}
               </div>
             ))}
           </div>

@@ -8,6 +8,8 @@ import {
   publicOrderError,
   roundMoney,
 } from "../src/lib/public-order.ts";
+import { getOrderAgeLabel, getOrderItemDetails } from "../src/lib/order-operational.ts";
+import { shouldPollTracking, shouldRefreshForOrderEvent } from "../src/lib/order-sync.ts";
 
 const ids = {
   format: "00000000-0000-4000-8000-000000000002",
@@ -66,4 +68,47 @@ test("rejeita campos obrigatórios, IDs inválidos e repetição de sabores", ()
 
 test("mapeia conflitos de idempotência sem expor erro do banco", () => {
   assert.deepEqual(publicOrderError(409, "IDEMPOTENCY_CONFLICT"), { status: 409, code: "IDEMPOTENCY_CONFLICT", message: "Este envio já foi usado para um pedido diferente." });
+});
+
+test("transforma detalhes JSONB em instruções claras para a operação", () => {
+  const details = getOrderItemDetails({
+    id: "item-1",
+    productName: "Milk-shake 500 ml",
+    quantity: 1,
+    unitPrice: 22,
+    details: { flavors: [{ name: "Morango" }], topping: { name: "Leite condensado" } },
+    notes: "Sem canudo",
+  });
+  assert.deepEqual(details, ["Sabor: Morango", "Cobertura: Leite condensado", "Obs. do item: Sem canudo"]);
+});
+
+test("atualiza os textos relativos do pedido a partir do relógio compartilhado", () => {
+  const now = Date.parse("2026-07-14T18:10:00.000Z");
+  const baseOrder = {
+    id: "order-1",
+    customerName: "Cliente",
+    items: [],
+    paymentMethod: "Pix",
+    paymentStatus: "pending",
+    total: 10,
+    createdAt: "2026-07-14T17:00:00.000Z",
+    updatedAt: "2026-07-14T17:00:00.000Z",
+    origin: "internal",
+    deliveryType: "pickup",
+  };
+
+  assert.equal(getOrderAgeLabel({ ...baseOrder, orderStatus: "new" }, now), "Aguardando há 1 h 10 min");
+  assert.equal(getOrderAgeLabel({ ...baseOrder, orderStatus: "new", createdAt: "2026-07-14T18:08:00.000Z" }, now), "Aguardando há 2 min");
+  assert.equal(getOrderAgeLabel({ ...baseOrder, orderStatus: "preparing", preparingAt: "2026-07-14T18:09:00.000Z" }, now), "Em preparo há 1 min");
+  assert.equal(getOrderAgeLabel({ ...baseOrder, orderStatus: "ready", readyAt: "2026-07-14T18:10:00.000Z" }, now), "Pronto agora");
+});
+
+test("controla polling público e eventos de pedido sem atualizar estados finais", () => {
+  assert.equal(shouldPollTracking("new", true, false), true);
+  assert.equal(shouldPollTracking("ready", false, false), false);
+  assert.equal(shouldPollTracking("delivered", true, false), false);
+  assert.equal(shouldPollTracking("preparing", true, true), false);
+  assert.equal(shouldRefreshForOrderEvent("INSERT"), true);
+  assert.equal(shouldRefreshForOrderEvent("UPDATE"), true);
+  assert.equal(shouldRefreshForOrderEvent("DELETE"), false);
 });

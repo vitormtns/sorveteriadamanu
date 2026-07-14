@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useOrders } from "@/components/orders-provider";
 import { Button, Card, Field, Select } from "@/components/ui";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/status-badge";
-import { getOrderChecklist, getOrderIssues, splitOrderItemName } from "@/lib/order-operational";
+import { getOrderChecklist, getOrderIssues, getOrderItemDetails } from "@/lib/order-operational";
 import { OrderStatus, OrderStatusHistoryEntry, PaymentStatus } from "@/lib/types";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { paymentLabels } from "@/lib/settings";
@@ -135,12 +135,12 @@ export default function OrderDetailPage() {
           <h3 className="mb-3 font-extrabold">Itens do pedido</h3>
           <div className="divide-y divide-slate-100">
             {order.items.map((item) => {
-              const parsed = splitOrderItemName(item.productName);
+              const details = getOrderItemDetails(item);
               return (
                 <div className="flex justify-between gap-3 py-3" key={item.id}>
                   <div className="min-w-0">
-                    <p className="font-semibold">{parsed.title}</p>
-                    {parsed.details.length > 0 && <p className="mt-1 text-xs leading-relaxed text-slate-500">{parsed.details.join(" · ")}</p>}
+                    <p className="font-semibold">{item.productName.split(/\s(?:—|-|·)\s/)[0]}</p>
+                    {details.length > 0 && <p className="mt-1 text-xs leading-relaxed text-slate-500">{details.join(" · ")}</p>}
                     <p className="mt-1 text-sm text-[var(--muted)]">{item.quantity} × {formatCurrency(item.unitPrice)}</p>
                   </div>
                   <b className="shrink-0 font-semibold">{formatCurrency(item.quantity * item.unitPrice)}</b>

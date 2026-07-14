@@ -1,11 +1,12 @@
 import { OrderStatus, PaymentStatus } from "@/lib/types";
 import { orderStatusLabel, paymentStatusLabel } from "@/lib/utils";
 
-export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
+export function PaymentStatusBadge({ status, contextual = false }: { status: PaymentStatus; contextual?: boolean }) {
   const style = status === "paid"
     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
     : "border-amber-200 bg-amber-50 text-amber-700";
-  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold ${style}`}>{paymentStatusLabel[status]}</span>;
+  const label = contextual ? `Pagamento ${paymentStatusLabel[status].toLowerCase()}` : paymentStatusLabel[status];
+  return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold ${style}`}>{label}</span>;
 }
 
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {
