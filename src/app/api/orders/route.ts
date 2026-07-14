@@ -59,9 +59,10 @@ export async function POST(request: NextRequest) {
       if (!data) return errorResponse(429, "RATE_LIMITED", "Aguarde alguns minutos antes de tentar novamente.");
     }
 
-    const { data: order, error } = await client.rpc("create_public_order", {
+    const { data: order, error } = await client.rpc("create_public_order_with_tracking", {
       p_idempotency_key: parsed.idempotencyKey,
       p_request: toPublicOrderRpcPayload(parsed),
+      p_tracking_token: parsed.trackingToken,
     });
     if (error || !order) {
       const mapped = publicOrderError(error?.code === "23505" ? 409 : 422, error?.message);
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest) {
         discount: numericToNumber(order.discount),
         total: numericToNumber(order.total),
         createdAt: order.created_at,
+        trackingToken: parsed.trackingToken,
       },
     }, { status: 201 });
   } catch (error) {

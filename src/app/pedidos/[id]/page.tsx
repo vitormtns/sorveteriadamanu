@@ -1,33 +1,40 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { ArrowLeft, Banknote, CheckCircle2, ChefHat, MapPin, PackageCheck, Printer, Store, Truck, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useStore } from "@/components/store-provider";
-import { Button, Card, Field, Select, Textarea } from "@/components/ui";
+import { useOrders } from "@/components/orders-provider";
+import { Button, Card, Field, Select } from "@/components/ui";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/status-badge";
 import { getOrderChecklist, getOrderIssues, splitOrderItemName } from "@/lib/order-operational";
-import { OrderStatus, PaymentStatus } from "@/lib/types";
+import { OrderStatus, OrderStatusHistoryEntry, PaymentStatus } from "@/lib/types";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { paymentLabels } from "@/lib/settings";
 
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { orders, updateOrder } = useStore();
+  const { orders, updateOperationalStatus, updatePaymentStatus, cancelOrder, actioningOrderId, error, getOrderHistory } = useOrders();
   const order = orders.find((item) => item.id === id);
+  const [history, setHistory] = useState<OrderStatusHistoryEntry[]>([]);
+
+  useEffect(() => {
+    if (!order) return;
+    void getOrderHistory(id).then(setHistory);
+  }, [getOrderHistory, id, order]);
 
   if (!order) return <Card><p className="font-bold">Pedido não encontrado.</p><Link className="mt-3 inline-block text-[var(--purple)]" href="/pedidos">Voltar aos pedidos</Link></Card>;
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  const currentOrder = order;
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    updateOrder(id, {
-      paymentStatus: data.get("paymentStatus") as PaymentStatus,
-      orderStatus: data.get("orderStatus") as OrderStatus,
-      notes: String(data.get("notes") || ""),
-    });
+    const paymentStatus = data.get("paymentStatus") as PaymentStatus;
+    const orderStatus = data.get("orderStatus") as OrderStatus;
+    if (paymentStatus !== currentOrder.paymentStatus) await updatePaymentStatus(id, paymentStatus);
+    if (orderStatus !== currentOrder.orderStatus && orderStatus !== "canceled") await updateOperationalStatus(id, orderStatus);
     router.push("/pedidos");
   }
 
@@ -110,13 +117,18 @@ export default function OrderDetailPage() {
         <Card className="p-4 md:p-5">
           <h3 className="font-extrabold">Ações rápidas</h3>
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4">
-            {order.paymentStatus === "pending" && <Button onClick={() => updateOrder(id, { paymentStatus: "paid" })}><Banknote size={17} /> Marcar como pago</Button>}
-            {order.orderStatus === "new" && <Button variant="secondary" onClick={() => updateOrder(id, { orderStatus: "preparing" })}><ChefHat size={17} /> Iniciar preparo</Button>}
-            {order.orderStatus === "preparing" && <Button variant="secondary" onClick={() => updateOrder(id, { orderStatus: "ready" })}><CheckCircle2 size={17} /> Marcar pronto</Button>}
-            {order.orderStatus === "ready" && <Button variant="secondary" onClick={() => updateOrder(id, { orderStatus: "delivered" })}>{order.deliveryType === "delivery" ? <Truck size={17} /> : <PackageCheck size={17} />} {order.deliveryType === "delivery" ? "Finalizar entrega" : "Finalizar retirada"}</Button>}
+            {order.paymentStatus === "pending" && <Button disabled={actioningOrderId === id} onClick={() => void updatePaymentStatus(id, "paid")}><Banknote size={17} /> Marcar como pago</Button>}
+            {order.orderStatus === "new" && <Button disabled={actioningOrderId === id} variant="secondary" onClick={() => void updateOperationalStatus(id, "preparing")}><ChefHat size={17} /> Iniciar preparo</Button>}
+            {order.orderStatus === "preparing" && <Button disabled={actioningOrderId === id} variant="secondary" onClick={() => void updateOperationalStatus(id, "ready")}><CheckCircle2 size={17} /> Marcar pronto</Button>}
+            {order.orderStatus === "ready" && <Button disabled={actioningOrderId === id} variant="secondary" onClick={() => void updateOperationalStatus(id, "delivered")}>{order.deliveryType === "delivery" ? <Truck size={17} /> : <PackageCheck size={17} />} {order.deliveryType === "delivery" ? "Finalizar entrega" : "Finalizar retirada"}</Button>}
           </div>
         </Card>
       )}
+
+      <Card className="p-4 md:p-5">
+        <h3 className="font-extrabold">Histórico operacional</h3>
+        {history.length ? <ol className="mt-3 grid gap-2">{history.map((entry) => <li key={entry.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm"><span><strong>{statusLabel(entry.newStatus)}</strong>{entry.previousStatus ? ` (antes: ${statusLabel(entry.previousStatus)})` : ""}{entry.notes ? ` · ${entry.notes}` : ""}</span><time className="text-xs text-[var(--muted)]">{formatDateTime(entry.createdAt)}</time></li>)}</ol> : <p className="mt-3 text-sm text-[var(--muted)]">Nenhuma mudança operacional registrada.</p>}
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
         <Card className="p-4 md:p-5">
@@ -158,15 +170,13 @@ export default function OrderDetailPage() {
                 <option value="canceled">Cancelado</option>
               </Select>
             </Field>
-            <Field label="Observações">
-              <Textarea name="notes" defaultValue={order.notes} rows={4} placeholder="Nenhuma observação" />
-            </Field>
+            <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">As observações são preservadas como registro do pedido e não podem ser alteradas nesta etapa.</p>
             <Button type="submit">Salvar alterações</Button>
+            {error && <p role="alert" className="text-sm font-bold text-red-700">{error}</p>}
             {!isCanceled && (
               <Button type="button" variant="danger" onClick={() => {
                 if (confirm("Deseja cancelar este pedido?")) {
-                  updateOrder(id, { orderStatus: "canceled" });
-                  router.push("/pedidos");
+                  void cancelOrder(id, "Cancelado pela equipe").then((done) => { if (done) router.push("/pedidos"); });
                 }
               }}>
                 <XCircle size={18} /> Cancelar pedido
@@ -177,4 +187,8 @@ export default function OrderDetailPage() {
       </div>
     </div>
   );
+}
+
+function statusLabel(status: OrderStatus) {
+  return { new: "Recebido", preparing: "Em preparo", ready: "Pronto", delivered: "Entregue", canceled: "Cancelado" }[status];
 }

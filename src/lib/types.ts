@@ -123,6 +123,16 @@ export interface OrderItem {
   notes?: string;
 }
 
+export interface OrderStatusHistoryEntry {
+  id: string;
+  orderId: string;
+  previousStatus?: OrderStatus;
+  newStatus: OrderStatus;
+  changedBy?: string;
+  notes?: string;
+  createdAt: string;
+}
+
 export interface Order {
   id: string;
   customerName: string;

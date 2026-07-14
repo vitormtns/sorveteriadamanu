@@ -1,6 +1,7 @@
-import { Order, OrderStatus, PaymentStatus } from "@/lib/types";
+import { Order, OrderStatus, OrderStatusHistoryEntry, PaymentStatus } from "@/lib/types";
 import {
   mapOrderFromDatabase,
+  mapOrderStatusHistoryFromDatabase,
   mapOrderCreateInputToRpcArgs,
   OrderCreateInput,
 } from "@/data/mappers/order";
@@ -11,9 +12,11 @@ export interface OrderRepository {
   list(): Promise<RepositoryResult<Order[]>>;
   findById(id: string): Promise<RepositoryResult<Order | null>>;
   findByPublicCode(publicCode: string): Promise<RepositoryResult<Order | null>>;
+  findHistory(orderId: string): Promise<RepositoryResult<OrderStatusHistoryEntry[]>>;
   create(order: OrderCreateInput): Promise<RepositoryResult<Order>>;
   updateOperationalStatus(id: string, status: OrderStatus, cancellationReason?: string): Promise<RepositoryResult<Order>>;
   updatePaymentStatus(id: string, status: PaymentStatus): Promise<RepositoryResult<Order>>;
+  cancel(id: string, reason: string): Promise<RepositoryResult<Order>>;
 }
 
 export function createOrderRepository(client: RepositoryClient): OrderRepository {
@@ -63,13 +66,34 @@ export function createOrderRepository(client: RepositoryClient): OrderRepository
 
   return {
     async list() {
-      const { data, error } = await client
-        .from("orders")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const [recent, active, unpaid] = await Promise.all([
+        client
+          .from("orders")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(100),
+        client
+          .from("orders")
+          .select("*")
+          .in("order_status", ["new", "preparing", "ready"])
+          .order("created_at", { ascending: false }),
+        client
+          .from("orders")
+          .select("*")
+          .eq("payment_status", "pending")
+          .neq("order_status", "canceled")
+          .order("created_at", { ascending: false }),
+      ]);
 
+      const error = recent.error ?? active.error ?? unpaid.error;
       if (error) return fail(error);
-      return mapOrdersWithItems(data ?? []);
+
+      const uniqueOrders = new Map<string, DatabaseOrder>();
+      for (const order of [...(recent.data ?? []), ...(active.data ?? []), ...(unpaid.data ?? [])]) {
+        uniqueOrders.set(order.id, order);
+      }
+      const data = [...uniqueOrders.values()].sort((left, right) => right.created_at.localeCompare(left.created_at));
+      return mapOrdersWithItems(data);
     },
 
     async findById(id) {
@@ -78,6 +102,16 @@ export function createOrderRepository(client: RepositoryClient): OrderRepository
 
     async findByPublicCode(publicCode) {
       return findBy("public_code", publicCode);
+    },
+
+    async findHistory(orderId) {
+      const { data, error } = await client
+        .from("order_status_history")
+        .select("*")
+        .eq("order_id", orderId)
+        .order("created_at", { ascending: true });
+      if (error) return fail(error);
+      return ok((data ?? []).map(mapOrderStatusHistoryFromDatabase));
     },
 
     async create(order) {
@@ -112,6 +146,12 @@ export function createOrderRepository(client: RepositoryClient): OrderRepository
         p_payment_status: status,
       });
 
+      if (error) return fail(error);
+      return reloadOrder(data.id);
+    },
+
+    async cancel(id, reason) {
+      const { data, error } = await client.rpc("cancel_order", { p_order_id: id, p_cancellation_reason: reason });
       if (error) return fail(error);
       return reloadOrder(data.id);
     },

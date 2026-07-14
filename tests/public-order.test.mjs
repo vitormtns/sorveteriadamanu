@@ -46,6 +46,7 @@ test("valida payload público e descarta preços enviados pelo navegador", () =>
     address: "Rua de teste, 123",
     paymentMethod: "Pix",
     idempotencyKey: "pedido-publico-valido-20260714",
+    trackingToken: "12345678901234567890123456789012",
     total: 0.37,
     items: [{ builderType: "ice_cream", quantity: 1, formatId: ids.format, scoopId: ids.scoop, toppingId: ids.topping, flavorIds: [ids.flavor], unitPrice: 0.37 }],
   });
@@ -57,9 +58,9 @@ test("valida payload público e descarta preços enviados pelo navegador", () =>
 });
 
 test("rejeita campos obrigatórios, IDs inválidos e repetição de sabores", () => {
-  const missingAddress = parsePublicOrderRequest({ customerName: "Cliente", phone: "11999998888", deliveryType: "delivery", paymentMethod: "Pix", idempotencyKey: "pedido-publico-invalido-1", items: [] });
+  const missingAddress = parsePublicOrderRequest({ customerName: "Cliente", phone: "11999998888", deliveryType: "delivery", paymentMethod: "Pix", idempotencyKey: "pedido-publico-invalido-1", trackingToken: "12345678901234567890123456789012", items: [] });
   assert.equal("code" in missingAddress && missingAddress.code, "PAYLOAD_INVALID");
-  const repeatedFlavor = parsePublicOrderRequest({ customerName: "Cliente", phone: "11999998888", deliveryType: "pickup", paymentMethod: "Pix", idempotencyKey: "pedido-publico-invalido-2", items: [{ builderType: "ice_cream", quantity: 1, formatId: ids.format, scoopId: ids.scoop, toppingId: ids.topping, flavorIds: [ids.flavor, ids.flavor] }] });
+  const repeatedFlavor = parsePublicOrderRequest({ customerName: "Cliente", phone: "11999998888", deliveryType: "pickup", paymentMethod: "Pix", idempotencyKey: "pedido-publico-invalido-2", trackingToken: "12345678901234567890123456789012", items: [{ builderType: "ice_cream", quantity: 1, formatId: ids.format, scoopId: ids.scoop, toppingId: ids.topping, flavorIds: [ids.flavor, ids.flavor] }] });
   assert.equal("code" in repeatedFlavor && repeatedFlavor.code, "PAYLOAD_INVALID");
 });
 

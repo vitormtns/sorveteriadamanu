@@ -15,7 +15,7 @@ import {
   Truck,
 } from "lucide-react";
 import Link from "next/link";
-import { useStore } from "@/components/store-provider";
+import { useOrders } from "@/components/orders-provider";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/status-badge";
 import { Button, Card } from "@/components/ui";
 import {
@@ -99,7 +99,8 @@ export function OperationalOrderCard({
   compact?: boolean;
   context?: QueueContext;
 }) {
-  const { updateOrder } = useStore();
+  const { updateOperationalStatus, updatePaymentStatus, actioningOrderId } = useOrders();
+  const busy = actioningOrderId === order.id;
   const action = order.orderStatus in nextAction
     ? nextAction[order.orderStatus as keyof typeof nextAction]
     : null;
@@ -207,17 +208,17 @@ export function OperationalOrderCard({
         <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 border-t border-white/80 pt-3 min-[390px]:grid-cols-[1fr_auto]">
           {hasPrimary && (
             primaryIsPayment ? (
-              <Button className="min-h-12 px-3 font-extrabold" onClick={() => updateOrder(order.id, { paymentStatus: "paid" })}>
+              <Button disabled={busy} className="min-h-12 px-3 font-extrabold" onClick={() => void updatePaymentStatus(order.id, "paid")}>
                 <Banknote size={17} /> Receber pagamento
               </Button>
             ) : (
-              <Button className="min-h-12 min-w-0 px-3 font-extrabold" onClick={() => updateOrder(order.id, { orderStatus: action!.status })}>
+              <Button disabled={busy} className="min-h-12 min-w-0 px-3 font-extrabold" onClick={() => void updateOperationalStatus(order.id, action!.status)}>
                 {ActionIcon && <ActionIcon size={17} />} <span className="sm:hidden">{action!.shortLabel}</span><span className="hidden sm:inline">{actionLabel}</span>
               </Button>
             )
           )}
           {showPaymentAction && !primaryIsPayment && (
-            <Button variant="secondary" className="min-h-12 px-3" onClick={() => updateOrder(order.id, { paymentStatus: "paid" })}>
+            <Button disabled={busy} variant="secondary" className="min-h-12 px-3" onClick={() => void updatePaymentStatus(order.id, "paid")}>
               <Banknote size={16} /> Receber
             </Button>
           )}

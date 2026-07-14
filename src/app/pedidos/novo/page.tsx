@@ -19,8 +19,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useStore } from "@/components/store-provider";
+import { useOrders } from "@/components/orders-provider";
 import { Button, Card, Field, Input, Select, Textarea } from "@/components/ui";
-import { ConfigurableItem, PaymentMethod, PaymentStatus, Product } from "@/lib/types";
+import { ConfigurableItem, DeliveryType, PaymentMethod, PaymentStatus, Product } from "@/lib/types";
 import { formatCurrency, uid } from "@/lib/utils";
 import { formatPhone, isValidPhone } from "@/lib/phone";
 
@@ -31,31 +32,10 @@ type CartItem = {
   productId: string;
   name: string;
   detail: string;
+  details?: Record<string, unknown>;
   price: number;
   quantity: number;
 };
-
-const acaiSizes = [
-  { name: "300 ml", price: 14 },
-  { name: "500 ml", price: 19 },
-  { name: "700 ml", price: 25 },
-  { name: "1 litro", price: 34 },
-];
-const iceFormats = [
-  { name: "Copo", price: 0 },
-  { name: "Casquinha", price: 0 },
-  { name: "Pote", price: 4 },
-];
-const iceScoops = [
-  { name: "1 bola", price: 7, max: 1 },
-  { name: "2 bolas", price: 12, max: 2 },
-  { name: "3 bolas", price: 16, max: 3 },
-];
-const shakeSizes = [
-  { name: "300 ml", price: 12 },
-  { name: "500 ml", price: 17 },
-  { name: "700 ml", price: 22 },
-];
 
 const categoryOptions: { kind: Kind; title: string; description: string; icon: typeof Sparkles; tone: string }[] = [
   { kind: "acai", title: "Açaí", description: "Tamanho e adicionais", icon: Sparkles, tone: "bg-[#4a0b63] text-white" },
@@ -66,7 +46,8 @@ const categoryOptions: { kind: Kind; title: string; description: string; icon: t
 ];
 
 export default function NewOrderPage() {
-  const { products, settings, addOrder } = useStore();
+  const { products, settings, deliveryBuilderOptions } = useStore();
+  const { createOrder, actioningOrderId, error: orderError } = useOrders();
   const [phase, setPhase] = useState<Phase>("build");
   const [kind, setKind] = useState<Kind | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -91,9 +72,18 @@ export default function NewOrderPage() {
   const [notes, setNotes] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Pix");
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("paid");
+  const [deliveryType, setDeliveryType] = useState<DeliveryType>("pickup");
+  const [address, setAddress] = useState("");
 
-  const total = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
+  const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
+  const deliveryFee = deliveryType === "delivery" ? settings.delivery.fee : 0;
+  const total = subtotal + deliveryFee;
   const freeAcaiExtras = settings.delivery.freeAddOnsQuantity;
+  const builderOptions = deliveryBuilderOptions.filter((option) => option.active && option.available);
+  const acaiSizes = builderOptions.filter((option) => option.builderType === "acai" && option.optionType === "size");
+  const iceFormats = builderOptions.filter((option) => option.builderType === "ice_cream" && option.optionType === "format");
+  const iceScoops = builderOptions.filter((option) => option.builderType === "ice_cream" && option.optionType === "scoop");
+  const shakeSizes = builderOptions.filter((option) => option.builderType === "milkshake" && option.optionType === "size");
   const acaiExtras = settings.acaiExtras.filter((item) => item.active !== false && item.available && item.name.trim());
   const iceFlavors = settings.iceCreamFlavors.filter((item) => item.active !== false && item.available && item.name.trim()).map((item) => item.name);
   const shakeFlavors = settings.milkshakeFlavors.filter((item) => item.active !== false && item.available && item.name.trim()).map((item) => item.name);
@@ -141,7 +131,7 @@ export default function NewOrderPage() {
       paidExtras.length ? `Pagos: ${paidExtras.join(", ")}` : "",
       acaiNote.trim() ? `Observação: ${acaiNote.trim()}` : "",
     ].filter(Boolean);
-    addCartItem({ productId: "internal-acai", name: `Açaí ${acaiSize}`, detail: details.join(" · "), price: acaiPrice });
+    addCartItem({ productId: "internal-acai", name: `Açaí ${acaiSize}`, detail: details.join(" · "), price: acaiPrice, details: { size: acaiSize, addOns: selectedExtras, freeAddOns: included, paidAddOns: paidExtras } });
     resetBuilder();
   }
 
@@ -153,7 +143,7 @@ export default function NewOrderPage() {
       selectedFlavors.join(", "),
       iceNote.trim() ? `Observação: ${iceNote.trim()}` : "",
     ].filter(Boolean);
-    addCartItem({ productId: "internal-icecream", name: `Sorvete no ${iceFormat.toLowerCase()} · ${iceScoop}`, detail: details.join(" · "), price: icePrice });
+    addCartItem({ productId: "internal-icecream", name: `Sorvete no ${iceFormat.toLowerCase()} · ${iceScoop}`, detail: details.join(" · "), price: icePrice, details: { format: iceFormat, scoop: iceScoop, flavors: selectedFlavors } });
     resetBuilder();
   }
 
@@ -165,12 +155,13 @@ export default function NewOrderPage() {
       name: `Milk-shake ${shakeSize} · ${shakeFlavor}`,
       detail: shakeNote.trim() ? `Observação: ${shakeNote.trim()}` : "Sem observações",
       price: shakePrice,
+      details: { size: shakeSize, flavor: shakeFlavor },
     });
     resetBuilder();
   }
 
   function toggleFlavor(name: string) {
-    const max = iceScoops.find((item) => item.name === iceScoop)?.max || 1;
+    const max = iceScoops.find((item) => item.name === iceScoop)?.maxFlavors || 1;
     setSelectedFlavors((current) =>
       current.includes(name)
         ? current.filter((item) => item !== name)
@@ -184,7 +175,7 @@ export default function NewOrderPage() {
     ));
   }
 
-  function saveOrder() {
+  async function saveOrder() {
     if (!cart.length) {
       setMessage("Adicione pelo menos um item ao pedido.");
       setPhase("build");
@@ -194,7 +185,11 @@ export default function NewOrderPage() {
       setValidationError("Informe um telefone válido com DDD.");
       return;
     }
-    const id = addOrder({
+    if (deliveryType === "delivery" && !address.trim()) {
+      setValidationError("Informe o endereço para entrega.");
+      return;
+    }
+    const saved = await createOrder({
       customerName: customerName.trim() || "Cliente balcão",
       phone: phone.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -203,17 +198,20 @@ export default function NewOrderPage() {
       orderStatus: "new",
       status: paymentStatus === "paid" ? "paid" : "pending_payment",
       origin: "internal",
-      deliveryType: "pickup",
+      deliveryType,
+      address: deliveryType === "delivery" ? address.trim() : undefined,
+      deliveryFee,
       total,
       items: cart.map((item) => ({
         id: item.id,
-        productId: item.productId,
+        productId: item.productId?.startsWith("internal-") ? undefined : item.productId || undefined,
         productName: item.detail ? `${item.name} — ${item.detail}` : item.name,
         quantity: item.quantity,
         unitPrice: item.price,
+        details: item.details,
       })),
     });
-    setOrderId(id);
+    if (saved) setOrderId(saved.id);
   }
 
   function startAgain() {
@@ -226,6 +224,8 @@ export default function NewOrderPage() {
     setNotes("");
     setPaymentMethod("Pix");
     setPaymentStatus("paid");
+    setDeliveryType("pickup");
+    setAddress("");
     setMessage("");
     setValidationError("");
     resetBuilder();
@@ -289,6 +289,7 @@ export default function NewOrderPage() {
                   add={addAcai}
                   extras={acaiExtras}
                   freeAddOns={freeAcaiExtras}
+                  sizes={acaiSizes}
                 />
               )}
               {kind === "icecream" && (
@@ -304,6 +305,8 @@ export default function NewOrderPage() {
                   price={icePrice}
                   add={addIceCream}
                   flavors={iceFlavors}
+                  formats={iceFormats}
+                  scoops={iceScoops}
                 />
               )}
               {kind === "milkshake" && (
@@ -317,6 +320,7 @@ export default function NewOrderPage() {
                   price={shakePrice}
                   add={addMilkshake}
                   flavors={shakeFlavors}
+                  sizes={shakeSizes}
                 />
               )}
               {kind === "promo" && <Promotions products={promotions} add={addCartItem} />}
@@ -336,6 +340,11 @@ export default function NewOrderPage() {
               setPaymentMethod={setPaymentMethod}
               paymentStatus={paymentStatus}
               setPaymentStatus={setPaymentStatus}
+              deliveryType={deliveryType}
+              setDeliveryType={setDeliveryType}
+              address={address}
+              setAddress={setAddress}
+              deliveryFee={deliveryFee}
               cart={cart}
               total={total}
               updateQuantity={updateQuantity}
@@ -349,8 +358,9 @@ export default function NewOrderPage() {
         <aside className="hidden min-w-0 lg:block">
           <div className="sticky top-24 grid gap-3">
             <CartCard cart={cart} total={total} updateQuantity={updateQuantity} remove={(id) => setCart((current) => current.filter((item) => item.id !== id))} />
-            <Button disabled={!cart.length} onClick={() => phase === "build" ? goToCheckout() : saveOrder()} className="min-h-14 w-full text-base">
-              {phase === "build" ? <>Finalizar pedido <ChevronRight size={19} /></> : <><Check size={19} /> Salvar pedido</>}
+            {orderError && <p role="alert" className="text-sm font-bold text-red-700">{orderError}</p>}
+            <Button disabled={!cart.length || actioningOrderId === "new"} onClick={() => { if (phase === "build") goToCheckout(); else void saveOrder(); }} className="min-h-14 w-full text-base">
+              {phase === "build" ? <>Finalizar pedido <ChevronRight size={19} /></> : <><Check size={19} /> {actioningOrderId === "new" ? "Salvando..." : "Salvar pedido"}</>}
             </Button>
             {phase === "checkout" && <Button variant="ghost" onClick={() => setPhase("build")}>Adicionar outro item</Button>}
           </div>
@@ -362,7 +372,7 @@ export default function NewOrderPage() {
       <div className="fixed inset-x-4 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-30 lg:hidden">
         <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-white/10 bg-[#21062f]/95 p-2.5 pl-4 text-white shadow-[0_14px_35px_rgba(33,6,47,.24)] backdrop-blur-xl">
           <div className="min-w-0 flex-1"><span className="block text-[9px] font-bold uppercase tracking-wider text-purple-200/65">{cart.length} {cart.length === 1 ? "item" : "itens"}</span><strong className="block truncate text-base">{formatCurrency(total)}</strong></div>
-          <button disabled={!cart.length} onClick={() => phase === "build" ? goToCheckout() : saveOrder()} className="inline-flex min-h-12 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[var(--yellow)] px-4 text-sm font-extrabold text-[var(--purple-dark)] disabled:opacity-40">
+          <button disabled={!cart.length || actioningOrderId === "new"} onClick={() => { if (phase === "build") goToCheckout(); else void saveOrder(); }} className="inline-flex min-h-12 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[var(--yellow)] px-4 text-sm font-extrabold text-[var(--purple-dark)] disabled:opacity-40">
             {phase === "build" ? <>Finalizar <ChevronRight size={18} /></> : <><Check size={18} /> Salvar</>}
           </button>
         </div>
@@ -383,18 +393,18 @@ function OptionButton({ label, detail, active, onClick }: { label: string; detai
   return <button type="button" onClick={onClick} className={`relative min-h-14 min-w-0 rounded-xl border p-3 text-left transition active:scale-[.98] ${active ? "border-[#6d2779] bg-[#f4eaf4] shadow-[inset_0_0_0_1px_#6d2779]" : "border-[var(--border)] bg-white"}`}><span className="block text-xs font-extrabold">{label}</span>{detail && <span className="mt-0.5 block text-[10px] text-[var(--muted)]">{detail}</span>}{active && <Check className="absolute right-2 top-2 text-[#6d2779]" size={14} />}</button>;
 }
 
-function AcaiBuilder({ size, setSize, selectedExtras, toggleExtra, note, setNote, price, add, extras, freeAddOns }: { size: string; setSize: (value: string) => void; selectedExtras: string[]; toggleExtra: (value: string) => void; note: string; setNote: (value: string) => void; price: number; add: () => void; extras: ConfigurableItem[]; freeAddOns: number }) {
+function AcaiBuilder({ size, setSize, selectedExtras, toggleExtra, note, setNote, price, add, extras, freeAddOns, sizes }: { size: string; setSize: (value: string) => void; selectedExtras: string[]; toggleExtra: (value: string) => void; note: string; setNote: (value: string) => void; price: number; add: () => void; extras: ConfigurableItem[]; freeAddOns: number; sizes: import("@/lib/types").DeliveryBuilderOption[] }) {
   const paidCount = Math.max(0, selectedExtras.length - freeAddOns);
-  return <Card className="grid gap-5 p-4 md:p-5"><BuilderHeader title="Montar açaí" description="Tamanho, adicionais e pronto." price={price} /><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">1. Tamanho</h4><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{acaiSizes.map((item) => <OptionButton key={item.name} label={item.name} detail={formatCurrency(item.price)} active={size === item.name} onClick={() => setSize(item.name)} />)}</div></section><section><div className="mb-2 flex items-center justify-between gap-2"><h4 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">2. Adicionais</h4><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${paidCount ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{Math.min(selectedExtras.length, freeAddOns)}/{freeAddOns} grátis{paidCount ? ` · ${paidCount} pago${paidCount > 1 ? "s" : ""}` : ""}</span></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{extras.map((item) => { const index = selectedExtras.indexOf(item.name); const detail = index >= freeAddOns ? `+ ${formatCurrency(item.extraPrice ?? 0)}` : index >= 0 ? "Grátis" : selectedExtras.length >= freeAddOns ? `+ ${formatCurrency(item.extraPrice ?? 0)}` : "Incluso"; return <OptionButton key={item.name} label={item.name} detail={detail} active={index >= 0} onClick={() => toggleExtra(item.name)} />; })}</div>{!extras.length && <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Nenhum adicional está disponível no momento.</p>}</section><Field label="Observação do item (opcional)"><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ex.: pouco leite condensado" /></Field><Button onClick={add} className="min-h-13 w-full"><Plus size={18} /> Adicionar açaí</Button></Card>;
+  return <Card className="grid gap-5 p-4 md:p-5"><BuilderHeader title="Montar açaí" description="Tamanho, adicionais e pronto." price={price} /><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">1. Tamanho</h4><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{sizes.map((item) => <OptionButton key={item.id} label={item.name} detail={formatCurrency(item.price)} active={size === item.name} onClick={() => setSize(item.name)} />)}</div></section><section><div className="mb-2 flex items-center justify-between gap-2"><h4 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">2. Adicionais</h4><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${paidCount ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{Math.min(selectedExtras.length, freeAddOns)}/{freeAddOns} grátis{paidCount ? ` · ${paidCount} pago${paidCount > 1 ? "s" : ""}` : ""}</span></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{extras.map((item) => { const index = selectedExtras.indexOf(item.name); const detail = index >= freeAddOns ? `+ ${formatCurrency(item.extraPrice ?? 0)}` : index >= 0 ? "Grátis" : selectedExtras.length >= freeAddOns ? `+ ${formatCurrency(item.extraPrice ?? 0)}` : "Incluso"; return <OptionButton key={item.name} label={item.name} detail={detail} active={index >= 0} onClick={() => toggleExtra(item.name)} />; })}</div>{!extras.length && <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Nenhum adicional está disponível no momento.</p>}</section><Field label="Observação do item (opcional)"><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ex.: pouco leite condensado" /></Field><Button onClick={add} className="min-h-13 w-full"><Plus size={18} /> Adicionar açaí</Button></Card>;
 }
 
-function IceCreamBuilder({ format, setFormat, scoop, setScoop, selectedFlavors, toggleFlavor, note, setNote, price, add, flavors }: { format: string; setFormat: (value: string) => void; scoop: string; setScoop: (value: string) => void; selectedFlavors: string[]; toggleFlavor: (value: string) => void; note: string; setNote: (value: string) => void; price: number; add: () => void; flavors: string[] }) {
-  const maxFlavors = iceScoops.find((item) => item.name === scoop)?.max || 1;
-  return <Card className="grid gap-5 p-4 md:p-5"><BuilderHeader title="Montar sorvete" description="Escolha como servir, as bolas e os sabores." price={price} /><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">1. Tipo</h4><div className="grid grid-cols-3 gap-2">{iceFormats.map((item) => <OptionButton key={item.name} label={item.name} detail={item.price ? `+ ${formatCurrency(item.price)}` : "Incluso"} active={format === item.name} onClick={() => setFormat(item.name)} />)}</div></section><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">2. Quantidade</h4><div className="grid grid-cols-3 gap-2">{iceScoops.map((item) => <OptionButton key={item.name} label={item.name} detail={formatCurrency(item.price)} active={scoop === item.name} onClick={() => setScoop(item.name)} />)}</div></section><section><div className="mb-2 flex justify-between gap-2"><h4 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">3. Sabores</h4><span className="text-[10px] font-bold text-[var(--muted)]">Até {maxFlavors}</span></div>{flavors.length ? <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{flavors.map((flavor) => <OptionButton key={flavor} label={flavor} active={selectedFlavors.includes(flavor)} onClick={() => toggleFlavor(flavor)} />)}</div> : <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Nenhum sabor de sorvete está disponível no momento.</p>}</section><Field label="Observação do item (opcional)"><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ex.: sabores separados" /></Field><Button onClick={add} className="min-h-13 w-full"><Plus size={18} /> Adicionar sorvete</Button></Card>;
+function IceCreamBuilder({ format, setFormat, scoop, setScoop, selectedFlavors, toggleFlavor, note, setNote, price, add, flavors, formats, scoops }: { format: string; setFormat: (value: string) => void; scoop: string; setScoop: (value: string) => void; selectedFlavors: string[]; toggleFlavor: (value: string) => void; note: string; setNote: (value: string) => void; price: number; add: () => void; flavors: string[]; formats: import("@/lib/types").DeliveryBuilderOption[]; scoops: import("@/lib/types").DeliveryBuilderOption[] }) {
+  const maxFlavors = scoops.find((item) => item.name === scoop)?.maxFlavors || 1;
+  return <Card className="grid gap-5 p-4 md:p-5"><BuilderHeader title="Montar sorvete" description="Escolha como servir, as bolas e os sabores." price={price} /><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">1. Tipo</h4><div className="grid grid-cols-3 gap-2">{formats.map((item) => <OptionButton key={item.id} label={item.name} detail={item.price ? `+ ${formatCurrency(item.price)}` : "Incluso"} active={format === item.name} onClick={() => setFormat(item.name)} />)}</div></section><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">2. Quantidade</h4><div className="grid grid-cols-3 gap-2">{scoops.map((item) => <OptionButton key={item.id} label={item.name} detail={formatCurrency(item.price)} active={scoop === item.name} onClick={() => setScoop(item.name)} />)}</div></section><section><div className="mb-2 flex justify-between gap-2"><h4 className="text-xs font-extrabold uppercase tracking-wide text-slate-500">3. Sabores</h4><span className="text-[10px] font-bold text-[var(--muted)]">Até {maxFlavors}</span></div>{flavors.length ? <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{flavors.map((flavor) => <OptionButton key={flavor} label={flavor} active={selectedFlavors.includes(flavor)} onClick={() => toggleFlavor(flavor)} />)}</div> : <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Nenhum sabor de sorvete está disponível no momento.</p>}</section><Field label="Observação do item (opcional)"><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ex.: sabores separados" /></Field><Button onClick={add} className="min-h-13 w-full"><Plus size={18} /> Adicionar sorvete</Button></Card>;
 }
 
-function MilkshakeBuilder({ size, setSize, flavor, setFlavor, note, setNote, price, add, flavors }: { size: string; setSize: (value: string) => void; flavor: string; setFlavor: (value: string) => void; note: string; setNote: (value: string) => void; price: number; add: () => void; flavors: string[] }) {
-  return <Card className="grid gap-5 p-4 md:p-5"><BuilderHeader title="Montar milk-shake" description="Só tamanho e sabor." price={price} /><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">1. Tamanho</h4><div className="grid grid-cols-3 gap-2">{shakeSizes.map((item) => <OptionButton key={item.name} label={item.name} detail={formatCurrency(item.price)} active={size === item.name} onClick={() => setSize(item.name)} />)}</div></section><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">2. Sabor</h4>{flavors.length ? <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{flavors.map((item) => <OptionButton key={item} label={item} active={flavor === item} onClick={() => setFlavor(item)} />)}</div> : <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Nenhum sabor de milk-shake está disponível no momento.</p>}</section><Field label="Observação do item (opcional)"><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ex.: sem canudo" /></Field><Button onClick={add} className="min-h-13 w-full"><Plus size={18} /> Adicionar milk-shake</Button></Card>;
+function MilkshakeBuilder({ size, setSize, flavor, setFlavor, note, setNote, price, add, flavors, sizes }: { size: string; setSize: (value: string) => void; flavor: string; setFlavor: (value: string) => void; note: string; setNote: (value: string) => void; price: number; add: () => void; flavors: string[]; sizes: import("@/lib/types").DeliveryBuilderOption[] }) {
+  return <Card className="grid gap-5 p-4 md:p-5"><BuilderHeader title="Montar milk-shake" description="Só tamanho e sabor." price={price} /><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">1. Tamanho</h4><div className="grid grid-cols-3 gap-2">{sizes.map((item) => <OptionButton key={item.id} label={item.name} detail={formatCurrency(item.price)} active={size === item.name} onClick={() => setSize(item.name)} />)}</div></section><section><h4 className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">2. Sabor</h4>{flavors.length ? <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{flavors.map((item) => <OptionButton key={item} label={item} active={flavor === item} onClick={() => setFlavor(item)} />)}</div> : <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Nenhum sabor de milk-shake está disponível no momento.</p>}</section><Field label="Observação do item (opcional)"><Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} placeholder="Ex.: sem canudo" /></Field><Button onClick={add} className="min-h-13 w-full"><Plus size={18} /> Adicionar milk-shake</Button></Card>;
 }
 
 function Promotions({ products, add }: { products: Product[]; add: (item: Omit<CartItem, "id" | "quantity">) => void }) {
@@ -409,8 +419,8 @@ function CartCard({ cart, total, updateQuantity, remove }: { cart: CartItem[]; t
   return <Card className="min-w-0 p-4"><div className="flex items-center justify-between gap-2"><h3 className="flex items-center gap-2 font-extrabold"><ShoppingCart size={18} /> Pedido atual</h3><span className="text-xs font-bold text-[var(--muted)]">{cart.length} {cart.length === 1 ? "item" : "itens"}</span></div>{cart.length ? <div className="mt-3 grid gap-2">{cart.map((item) => <div key={item.id} className="min-w-0 rounded-xl bg-[#faf5f9] p-3"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><strong className="block truncate text-sm">{item.name}</strong><p className="mt-0.5 line-clamp-2 text-[10px] leading-relaxed text-[var(--muted)]">{item.detail}</p></div><button onClick={() => remove(item.id)} aria-label={`Remover ${item.name}`} className="shrink-0 text-[#a44b70]"><Trash2 size={16} /></button></div><div className="mt-2 flex items-center justify-between"><div className="flex items-center gap-3"><button onClick={() => updateQuantity(item.id, -1)} aria-label="Diminuir quantidade" className="grid h-8 w-8 place-items-center rounded-lg bg-white"><Minus size={14} /></button><strong className="text-sm">{item.quantity}</strong><button onClick={() => updateQuantity(item.id, 1)} aria-label="Aumentar quantidade" className="grid h-8 w-8 place-items-center rounded-lg bg-white"><Plus size={14} /></button></div><strong className="text-sm">{formatCurrency(item.price * item.quantity)}</strong></div></div>)}</div> : <p className="mt-3 rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-500">Nenhum item adicionado.</p>}<div className="mt-4 flex items-center justify-between border-t border-[var(--border)] pt-4"><span className="font-bold">Total</span><strong className="text-xl text-[var(--purple)]">{formatCurrency(total)}</strong></div></Card>;
 }
 
-function Checkout({ customerName, setCustomerName, phone, setPhone, notes, setNotes, paymentMethod, setPaymentMethod, paymentStatus, setPaymentStatus, cart, total, updateQuantity, remove, addMore, error }: { customerName: string; setCustomerName: (value: string) => void; phone: string; setPhone: (value: string) => void; notes: string; setNotes: (value: string) => void; paymentMethod: PaymentMethod; setPaymentMethod: (value: PaymentMethod) => void; paymentStatus: PaymentStatus; setPaymentStatus: (value: PaymentStatus) => void; cart: CartItem[]; total: number; updateQuantity: (id: string, amount: number) => void; remove: (id: string) => void; addMore: () => void; error: string }) {
-  return <div className="grid gap-5"><div className="lg:hidden"><CartCard cart={cart} total={total} updateQuantity={updateQuantity} remove={remove} /><Button variant="ghost" onClick={addMore} className="mt-2 w-full"><Plus size={17} /> Adicionar outro item</Button></div><Card className="grid gap-5 p-4 md:p-5"><div><h3 className="flex items-center gap-2 text-lg font-extrabold"><UserRound size={19} /> Cliente</h3><p className="mt-1 text-xs text-[var(--muted)]">Se deixar vazio, salvaremos como Cliente balcão.</p></div><div className="grid gap-3 sm:grid-cols-2"><Field label="Nome do cliente"><Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Cliente balcão" /></Field><Field label="Telefone (opcional)"><Input type="tel" value={phone} onChange={(event) => setPhone(formatPhone(event.target.value))} inputMode="numeric" autoComplete="tel" maxLength={15} placeholder="(00) 00000-0000" /></Field></div>{error && <p role="alert" className="rounded-xl bg-red-50 px-3 py-2.5 text-sm font-bold text-red-700">{error}</p>}<div className="rounded-xl bg-[#f5ecf6] p-3 text-xs font-bold text-[#6d2779]">Origem: balcão · Tipo: retirada</div></Card><Card className="grid gap-5 p-4 md:p-5"><div><h3 className="flex items-center gap-2 text-lg font-extrabold"><CreditCard size={19} /> Pagamento</h3><p className="mt-1 text-xs text-[var(--muted)]">Informe como o cliente vai pagar.</p></div><Field label="Forma de pagamento"><Select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option value="A combinar">A combinar</option></Select></Field><div><p className="mb-2 text-sm font-bold text-slate-700">Status do pagamento</p><div className="grid grid-cols-2 gap-2"><button onClick={() => setPaymentStatus("paid")} className={`min-h-12 rounded-xl border text-sm font-bold ${paymentStatus === "paid" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-[var(--border)] bg-white text-slate-600"}`}>Pago</button><button onClick={() => setPaymentStatus("pending")} className={`min-h-12 rounded-xl border text-sm font-bold ${paymentStatus === "pending" ? "border-amber-500 bg-amber-50 text-amber-700" : "border-[var(--border)] bg-white text-slate-600"}`}>Pendente</button></div></div><Field label="Observações gerais (opcional)"><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Ex.: troco para R$ 50, retirar mais tarde" /></Field></Card></div>;
+function Checkout({ customerName, setCustomerName, phone, setPhone, notes, setNotes, paymentMethod, setPaymentMethod, paymentStatus, setPaymentStatus, deliveryType, setDeliveryType, address, setAddress, deliveryFee, cart, total, updateQuantity, remove, addMore, error }: { customerName: string; setCustomerName: (value: string) => void; phone: string; setPhone: (value: string) => void; notes: string; setNotes: (value: string) => void; paymentMethod: PaymentMethod; setPaymentMethod: (value: PaymentMethod) => void; paymentStatus: PaymentStatus; setPaymentStatus: (value: PaymentStatus) => void; deliveryType: DeliveryType; setDeliveryType: (value: DeliveryType) => void; address: string; setAddress: (value: string) => void; deliveryFee: number; cart: CartItem[]; total: number; updateQuantity: (id: string, amount: number) => void; remove: (id: string) => void; addMore: () => void; error: string }) {
+  return <div className="grid gap-5"><div className="lg:hidden"><CartCard cart={cart} total={total} updateQuantity={updateQuantity} remove={remove} /><Button variant="ghost" onClick={addMore} className="mt-2 w-full"><Plus size={17} /> Adicionar outro item</Button></div><Card className="grid gap-5 p-4 md:p-5"><div><h3 className="flex items-center gap-2 text-lg font-extrabold"><UserRound size={19} /> Cliente</h3><p className="mt-1 text-xs text-[var(--muted)]">Se deixar vazio, salvaremos como Cliente balcão.</p></div><div className="grid gap-3 sm:grid-cols-2"><Field label="Nome do cliente"><Input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Cliente balcão" /></Field><Field label="Telefone (opcional)"><Input type="tel" value={phone} onChange={(event) => setPhone(formatPhone(event.target.value))} inputMode="numeric" autoComplete="tel" maxLength={15} placeholder="(00) 00000-0000" /></Field></div><Field label="Forma de recebimento"><Select value={deliveryType} onChange={(event) => setDeliveryType(event.target.value as DeliveryType)}><option value="pickup">Retirada</option><option value="delivery">Entrega</option></Select></Field>{deliveryType === "delivery" && <Field label={`Endereço de entrega (taxa: ${formatCurrency(deliveryFee)})`}><Textarea value={address} onChange={(event) => setAddress(event.target.value)} rows={2} placeholder="Rua, número, bairro e referência" /></Field>}{error && <p role="alert" className="rounded-xl bg-red-50 px-3 py-2.5 text-sm font-bold text-red-700">{error}</p>}<div className="rounded-xl bg-[#f5ecf6] p-3 text-xs font-bold text-[#6d2779]">Origem: balcão · Tipo: {deliveryType === "delivery" ? "entrega" : "retirada"}</div></Card><Card className="grid gap-5 p-4 md:p-5"><div><h3 className="flex items-center gap-2 text-lg font-extrabold"><CreditCard size={19} /> Pagamento</h3><p className="mt-1 text-xs text-[var(--muted)]">Informe como o cliente vai pagar.</p></div><Field label="Forma de pagamento"><Select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option value="A combinar">A combinar</option></Select></Field><div><p className="mb-2 text-sm font-bold text-slate-700">Status do pagamento</p><div className="grid grid-cols-2 gap-2"><button onClick={() => setPaymentStatus("paid")} className={`min-h-12 rounded-xl border text-sm font-bold ${paymentStatus === "paid" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-[var(--border)] bg-white text-slate-600"}`}>Pago</button><button onClick={() => setPaymentStatus("pending")} className={`min-h-12 rounded-xl border text-sm font-bold ${paymentStatus === "pending" ? "border-amber-500 bg-amber-50 text-amber-700" : "border-[var(--border)] bg-white text-slate-600"}`}>Pendente</button></div></div><Field label="Observações gerais (opcional)"><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Ex.: troco para R$ 50, entregar mais tarde" /></Field></Card></div>;
 }
 
 function Success({ orderId, startAgain }: { orderId: string; startAgain: () => void }) {

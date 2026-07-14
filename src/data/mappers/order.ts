@@ -4,6 +4,7 @@ import {
   NewOrder,
   Order,
   OrderItem,
+  OrderStatusHistoryEntry,
   OrderOrigin,
   OrderStatus,
   PaymentMethod,
@@ -14,6 +15,7 @@ import {
   DatabaseOrder,
   DatabaseOrderInsert,
   DatabaseOrderItem,
+  DatabaseOrderStatusHistory,
   DatabaseOrderItemInsert,
   DatabaseOrderUpdate,
   DatabasePaymentMethod,
@@ -69,6 +71,18 @@ export function mapOrderItemFromDatabase(row: DatabaseOrderItem): OrderItem {
     subtotal: numericToNumber(row.subtotal),
     details: jsonObjectToRecord(row.details),
     notes: row.notes ?? undefined,
+  };
+}
+
+export function mapOrderStatusHistoryFromDatabase(row: DatabaseOrderStatusHistory): OrderStatusHistoryEntry {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    previousStatus: row.previous_status as OrderStatus | null ?? undefined,
+    newStatus: row.new_status as OrderStatus,
+    changedBy: row.changed_by ?? undefined,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
   };
 }
 

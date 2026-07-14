@@ -115,6 +115,21 @@ export interface Database {
         };
         Returns: DatabaseOrder;
       };
+      create_public_order_with_tracking: {
+        Args: {
+          p_idempotency_key: string;
+          p_request: Json;
+          p_tracking_token: string;
+        };
+        Returns: DatabaseOrder;
+      };
+      get_public_order_tracking: {
+        Args: {
+          p_public_code: string;
+          p_tracking_token: string;
+        };
+        Returns: Json;
+      };
       current_profile_role: {
         Args: Record<string, never>;
         Returns: DatabaseProfileRole | null;

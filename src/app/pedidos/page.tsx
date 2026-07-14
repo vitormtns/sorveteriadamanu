@@ -4,7 +4,7 @@ import { Suspense, useMemo, useState } from "react";
 import { Banknote, CalendarDays, ClipboardList, Clock3, PackageCheck, Printer, ReceiptText, Search, ShoppingBag, SlidersHorizontal, Store, Truck, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useStore } from "@/components/store-provider";
+import { useOrders } from "@/components/orders-provider";
 import { OperationalOrderCard } from "@/components/operational-order-card";
 import { Card, Input, Select } from "@/components/ui";
 import { Order } from "@/lib/types";
@@ -227,24 +227,26 @@ function ClosingSummary({ orders }: { orders: Order[] }) {
   const valid = dayOrders.filter((order) => order.orderStatus !== "canceled");
   const canceled = dayOrders.filter((order) => order.orderStatus === "canceled");
   const pending = valid.filter((order) => order.paymentStatus === "pending");
+  const paid = valid.filter((order) => order.paymentStatus === "paid");
   const unfinished = valid.filter((order) => order.orderStatus !== "delivered");
-  const sold = valid.reduce((sum, order) => sum + order.total, 0);
-  const received = valid.filter((order) => order.paymentStatus === "paid").reduce((sum, order) => sum + order.total, 0);
+  const sold = paid.reduce((sum, order) => sum + order.total, 0);
+  const received = sold;
   const pendingTotal = pending.reduce((sum, order) => sum + order.total, 0);
   const canceledTotal = canceled.reduce((sum, order) => sum + order.total, 0);
-  const averageTicket = valid.length ? sold / valid.length : 0;
+  const deliveryFees = paid.reduce((sum, order) => sum + (order.deliveryFee ?? 0), 0);
+  const averageTicket = paid.length ? sold / paid.length : 0;
   const methods = (["Pix", "Dinheiro", "Cartão", "A combinar"] as const).map((method) => ({
     method,
-    quantity: valid.filter((order) => order.paymentMethod === method).length,
-    total: valid.filter((order) => order.paymentMethod === method).reduce((sum, order) => sum + order.total, 0),
+    quantity: paid.filter((order) => order.paymentMethod === method).length,
+    total: paid.filter((order) => order.paymentMethod === method).reduce((sum, order) => sum + order.total, 0),
   }));
 
   const metrics = [
-    { label: "Total vendido", value: formatCurrency(sold), icon: ReceiptText },
+    { label: "Faturamento pago", value: formatCurrency(sold), icon: ReceiptText },
     { label: "Total recebido", value: formatCurrency(received), icon: Banknote },
     { label: "Total pendente", value: formatCurrency(pendingTotal), icon: Clock3 },
     { label: "Total cancelado", value: formatCurrency(canceledTotal), icon: WalletCards },
-    { label: "Pedidos", value: String(valid.length), icon: ShoppingBag },
+    { label: "Pedidos pagos", value: String(paid.length), icon: ShoppingBag },
     { label: "Ticket médio", value: formatCurrency(averageTicket), icon: ReceiptText },
   ];
 
@@ -273,6 +275,7 @@ function ClosingSummary({ orders }: { orders: Order[] }) {
       <div className="mt-3 grid gap-3 lg:grid-cols-[1.1fr_1fr]">
         <Card className="p-4">
           <h3 className="font-extrabold">Formas de pagamento</h3>
+          <p className="mt-1 text-xs text-[var(--muted)]">Valores recebidos; pedidos pendentes ficam separados.</p>
           <div className="mt-3 divide-y divide-[var(--border)]">
             {methods.map(({ method, quantity, total }) => (
               <div key={method} className="flex items-center justify-between py-2.5 text-sm">
@@ -284,6 +287,7 @@ function ClosingSummary({ orders }: { orders: Order[] }) {
         </Card>
         <Card className="p-4">
           <h3 className="font-extrabold">Pendências do dia</h3>
+          <p className="mt-1 text-xs text-[var(--muted)]">Taxas de entrega recebidas: {formatCurrency(deliveryFees)} · {paid.filter((order) => order.deliveryType === "delivery").length} entrega(s) · {paid.filter((order) => order.deliveryType === "pickup").length} retirada(s)</p>
           <div className="mt-3 grid gap-2">
             <div className="rounded-xl bg-amber-50 p-3">
               <p className="text-xs font-bold text-amber-800">Pagamentos pendentes · {pending.length}</p>
@@ -301,7 +305,7 @@ function ClosingSummary({ orders }: { orders: Order[] }) {
 }
 
 function OrdersView({ queue }: { queue: Queue | null }) {
-  const { orders } = useStore();
+  const { orders } = useOrders();
   const [detailFilter, setDetailFilter] = useState<DetailFilter>("all");
   const [datePreset, setDatePreset] = useState<DatePreset>(queue ? "all" : "today");
   const [search, setSearch] = useState("");

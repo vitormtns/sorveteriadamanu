@@ -1,17 +1,15 @@
 "use client";
 
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
-import { initialOrders, initialProducts } from "@/lib/mock-data";
-import { DeliveryBuilderOption, LegacyOrderStatus, LegacyPaymentMethod, NewOrder, Order, PaymentMethod, Product, StoreSettings } from "@/lib/types";
+import { initialProducts } from "@/lib/mock-data";
+import { DeliveryBuilderOption, Product, StoreSettings } from "@/lib/types";
 import { uid } from "@/lib/utils";
-import { createPublicOrderCode } from "@/lib/order-code";
 import { initialDeliveryBuilderOptions, initialSettings, normalizeSettings } from "@/lib/settings";
 import { createBrowserSupabaseClient } from "@/data/supabase/browser";
 import { createCatalogRepository, createProductRepository, createSettingsRepository, RepositoryError } from "@/data/repositories";
 
 interface StoreContextValue {
   products: Product[];
-  orders: Order[];
   settings: StoreSettings;
   deliveryBuilderOptions: DeliveryBuilderOption[];
   settingsSaveError: boolean;
@@ -21,9 +19,6 @@ interface StoreContextValue {
   saveProduct: (product: Omit<Product, "id" | "createdAt" | "updatedAt"> & { id?: string }) => Promise<boolean>;
   deleteProduct: (id: string) => Promise<boolean>;
   updateSettings: (update: Partial<StoreSettings> | ((current: StoreSettings) => StoreSettings)) => void;
-  addOrder: (order: NewOrder) => string;
-  updateOrder: (id: string, patch: Partial<Order>) => void;
-  refreshOrders: () => void;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -60,25 +55,8 @@ function settingsSaveMessage(error: RepositoryError): string {
   return "Não foi possível salvar as configurações.";
 }
 
-function normalizeOrder(order: Partial<Order> & Pick<Order, "id" | "customerName" | "items" | "paymentMethod" | "total" | "createdAt" | "updatedAt">): Order {
-  const legacyStatus = order.status as LegacyOrderStatus | undefined;
-  const paymentStatus = order.paymentStatus ?? (legacyStatus === "paid" ? "paid" : "pending");
-  const orderStatus = order.orderStatus ?? (legacyStatus === "canceled" ? "canceled" : legacyStatus === "paid" ? "delivered" : "new");
-  const rawPaymentMethod = order.paymentMethod as PaymentMethod | LegacyPaymentMethod;
-  return {
-    ...order,
-    paymentMethod: rawPaymentMethod === "Fiado/Outro" ? "A combinar" : rawPaymentMethod,
-    paymentStatus,
-    orderStatus,
-    status: orderStatus === "canceled" ? "canceled" : paymentStatus === "paid" ? "paid" : "pending_payment",
-    origin: order.origin ?? "internal",
-    deliveryType: order.deliveryType ?? "pickup",
-  };
-}
-
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [settings, setSettings] = useState<StoreSettings>(initialSettings);
   const [deliveryBuilderOptions, setDeliveryBuilderOptions] = useState<DeliveryBuilderOption[]>(initialDeliveryBuilderOptions);
   const [settingsSaveError, setSettingsSaveError] = useState(false);
@@ -93,11 +71,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
-    try {
-      const savedOrders = localStorage.getItem("manu-orders");
-      if (savedOrders) setOrders((JSON.parse(savedOrders) as Order[]).map(normalizeOrder));
-    } catch { /* Mantém os pedidos iniciais se os dados locais estiverem corrompidos. */ }
-
     const client = createBrowserSupabaseClient();
     if (!client) {
       if (process.env.NODE_ENV === "development") console.warn("Modo de demonstração: catálogo e configurações locais estão ativos.");
@@ -160,11 +133,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    try { localStorage.setItem("manu-orders", JSON.stringify(orders)); } catch { /* Preserva o estado em memória. */ }
-  }, [orders, ready]);
 
   useEffect(() => {
     if (!ready || !settingsLoaded.current || !settingsDirty.current) return;
@@ -249,33 +217,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setSettings((current) => normalizeSettings(typeof update === "function" ? update(current) : { ...current, ...update }));
   };
 
-  const refreshOrders = () => {
-    try {
-      const savedOrders = localStorage.getItem("manu-orders");
-      if (savedOrders) setOrders((JSON.parse(savedOrders) as Order[]).map(normalizeOrder));
-    } catch { /* Mantém o estado atual. */ }
-  };
-
-  const addOrder = (input: NewOrder) => {
-    const id = uid();
-    const now = new Date().toISOString();
-    setOrders((current) => [normalizeOrder({ ...input, publicCode: input.publicCode ?? createPublicOrderCode(id), id, createdAt: now, updatedAt: now }), ...current]);
-    return id;
-  };
-
-  const updateOrder = (id: string, patch: Partial<Order>) => setOrders((current) => current.map((order) => {
-    if (order.id !== id) return order;
-    const translatedPatch = { ...patch };
-    if (patch.status && !patch.paymentStatus && !patch.orderStatus) {
-      translatedPatch.paymentStatus = patch.status === "paid" ? "paid" : "pending";
-      if (patch.status === "canceled") translatedPatch.orderStatus = "canceled";
-    }
-    return normalizeOrder({ ...order, ...translatedPatch, updatedAt: new Date().toISOString() });
-  }));
-
   if (!ready) return <main role="status" className="grid min-h-screen place-items-center bg-[#fbf7f0] text-sm text-[var(--muted)]"><div className="grid justify-items-center gap-3"><span className="h-7 w-7 animate-spin rounded-full border-2 border-[#d8c7d9] border-t-[var(--purple)]" aria-hidden="true" />Carregando dados da sorveteria...</div></main>;
   if (initialLoadFailed) return <main className="grid min-h-screen place-items-center bg-[#fbf7f0] p-6 text-center"><div><h1 className="text-xl font-bold text-[var(--text)]">Não foi possível carregar a loja</h1><p className="mt-2 text-sm text-red-700">{dataError}</p><button type="button" onClick={() => window.location.reload()} className="mt-5 min-h-11 rounded-xl bg-[var(--purple)] px-5 text-sm font-bold text-white">Tentar novamente</button></div></main>;
-  return <StoreContext.Provider value={{ products, orders, settings, deliveryBuilderOptions, settingsSaveError, settingsSaving, dataError, ready, saveProduct, deleteProduct, updateSettings, addOrder, updateOrder, refreshOrders }}>{children}</StoreContext.Provider>;
+  return <StoreContext.Provider value={{ products, settings, deliveryBuilderOptions, settingsSaveError, settingsSaving, dataError, ready, saveProduct, deleteProduct, updateSettings }}>{children}</StoreContext.Provider>;
 }
 
 export function useStore() {

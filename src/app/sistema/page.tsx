@@ -4,7 +4,7 @@ import { ArrowRight, Banknote, Check, ChefHat, Clock3, PackageCheck, ReceiptText
 import Link from "next/link";
 import { OperationalOrderCard } from "@/components/operational-order-card";
 import { Card } from "@/components/ui";
-import { useStore } from "@/components/store-provider";
+import { useOrders } from "@/components/orders-provider";
 import { formatCurrency, isToday } from "@/lib/utils";
 import { Order } from "@/lib/types";
 
@@ -57,7 +57,7 @@ function TaskSection({
 }
 
 export default function Dashboard() {
-  const { orders } = useStore();
+  const { orders } = useOrders();
   const activeOrders = orders.filter((order) => order.orderStatus !== "canceled");
   const toPrepare = activeOrders.filter((order) => order.orderStatus === "new" || order.orderStatus === "preparing");
   const readyToDeliver = activeOrders.filter((order) => order.orderStatus === "ready");

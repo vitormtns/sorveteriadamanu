@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronLeft, CreditCard, IceCreamBowl, MapPin, MessageCircle, Minus, PackageCheck, Plus, ShoppingBag, Sparkles, Trash2, Truck, UserRound } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { useStore } from "@/components/store-provider";
+import { useOrders } from "@/components/orders-provider";
 import { ConfigurableItem, DeliveryBuilderOption, PaymentMethod, Promotion, StoreSettings } from "@/lib/types";
 import { formatCurrency, toDateInput, uid } from "@/lib/utils";
 import { formatPhone, isValidPhone } from "@/lib/phone";
@@ -21,7 +22,8 @@ type CheckoutStage = "review" | "delivery" | "address" | "name" | "phone" | "pay
 const emptyCustomer: Customer = { name: "", phone: "", deliveryType: "", address: "", payment: "", notes: "" };
 
 export function DeliveryBuilder() {
-  const { addOrder, settings, deliveryBuilderOptions } = useStore();
+  const { settings, deliveryBuilderOptions } = useStore();
+  const { createOrder } = useOrders();
   const [availabilityNow, setAvailabilityNow] = useState(() => new Date());
   const [kind, setKind] = useState<Kind | null>(null);
   const [step, setStep] = useState(0);
@@ -31,7 +33,7 @@ export function DeliveryBuilder() {
   const [shakeSize, setShakeSize] = useState(""); const [shakeFlavor, setShakeFlavor] = useState(""); const [shakeNote, setShakeNote] = useState("");
   const [customer, setCustomer] = useState<Customer>(emptyCustomer); const [error, setError] = useState(""); const [orderCode, setOrderCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [requestIdentity, setRequestIdentity] = useState<{ fingerprint: string; key: string } | null>(null);
+  const [requestIdentity, setRequestIdentity] = useState<{ fingerprint: string; key: string; trackingToken: string } | null>(null);
   const building = kind === "acai" || kind === "icecream" || kind === "milkshake";
   const stepCount = kind === "icecream" ? 4 : 3;
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -118,34 +120,36 @@ export function DeliveryBuilder() {
       : !cart.length ? "Adicione pelo menos um item ao pedido."
       : subtotal < settings.delivery.minimumOrder ? `O pedido mínimo é de ${formatCurrency(settings.delivery.minimumOrder)}.` : "";
     if (validation) return setError(validation);
-    const request: Omit<PublicOrderRequest, "idempotencyKey"> = { customerName: customer.name.trim(), phone: customer.phone.trim(), deliveryType: customer.deliveryType as "pickup" | "delivery", address: customer.deliveryType === "delivery" ? customer.address.trim() : undefined, paymentMethod: customer.payment as PaymentMethod, notes: customer.notes.trim() || undefined, items: cart.map((item) => ({ ...item.request, quantity: item.quantity })) };
+    const request: Omit<PublicOrderRequest, "idempotencyKey" | "trackingToken"> = { customerName: customer.name.trim(), phone: customer.phone.trim(), deliveryType: customer.deliveryType as "pickup" | "delivery", address: customer.deliveryType === "delivery" ? customer.address.trim() : undefined, paymentMethod: customer.payment as PaymentMethod, notes: customer.notes.trim() || undefined, items: cart.map((item) => ({ ...item.request, quantity: item.quantity })) };
     const fingerprint = JSON.stringify(request);
     const idempotencyKey = requestIdentity?.fingerprint === fingerprint ? requestIdentity.key : crypto.randomUUID();
-    setRequestIdentity({ fingerprint, key: idempotencyKey });
+    const trackingToken = requestIdentity?.fingerprint === fingerprint ? requestIdentity.trackingToken : crypto.randomUUID().replace(/-/g, "");
+    setRequestIdentity({ fingerprint, key: idempotencyKey, trackingToken });
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
       if (process.env.NODE_ENV !== "development") return setError("O envio de pedidos não está configurado neste ambiente.");
-      const id = addOrder({ customerName: request.customerName, phone: request.phone, items: cart.map(item => ({ id: item.id, productName: `${item.name} — ${item.detail}`, quantity: item.quantity, unitPrice: item.price })), notes: request.notes, paymentMethod: request.paymentMethod, paymentStatus: "pending", orderStatus: "new", status: "pending_payment", total, origin: "delivery", deliveryType: request.deliveryType, deliveryFee: request.deliveryType === "delivery" ? deliveryFee : 0, address: request.address });
-      setOrderCode(`DEMO-${id.slice(-6).toUpperCase()}`);
+      const demo = await createOrder({ customerName: request.customerName, phone: request.phone, items: cart.map(item => ({ id: item.id, productName: `${item.name} — ${item.detail}`, quantity: item.quantity, unitPrice: item.price })), notes: request.notes, paymentMethod: request.paymentMethod, paymentStatus: "pending", orderStatus: "new", status: "pending_payment", total, origin: "delivery", deliveryType: request.deliveryType, deliveryFee: request.deliveryType === "delivery" ? deliveryFee : 0, address: request.address });
+      if (!demo) return;
+      setOrderCode(`DEMO-${demo.id.slice(-6).toUpperCase()}:${trackingToken}`);
       return;
     }
     setSubmitting(true);
     setError("");
     try {
-      const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...request, idempotencyKey }) });
+      const response = await fetch("/api/orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...request, idempotencyKey, trackingToken }) });
       const result: unknown = await response.json();
       if (!response.ok || typeof result !== "object" || result === null || !("success" in result) || result.success !== true || !("order" in result) || typeof result.order !== "object" || result.order === null || !("publicCode" in result.order) || typeof result.order.publicCode !== "string") {
         const message = typeof result === "object" && result !== null && "error" in result && typeof result.error === "object" && result.error !== null && "message" in result.error && typeof result.error.message === "string" ? result.error.message : "Não foi possível enviar o pedido.";
         setError(message);
         return;
       }
-      setOrderCode(result.order.publicCode);
+      setOrderCode(`${result.order.publicCode}:${trackingToken}`);
     } catch {
       setError("Não foi possível se conectar ao servidor. Tente novamente.");
     } finally {
       setSubmitting(false);
     }
   };
-  if (orderCode) return <Success code={orderCode} restart={() => { setOrderCode(""); setCart([]); setCustomer(emptyCustomer); setRequestIdentity(null); reset(); }} />;
+  if (orderCode) { const [code, trackingToken] = orderCode.split(":"); return <Success code={code} trackingToken={trackingToken} restart={() => { setOrderCode(""); setCart([]); setCustomer(emptyCustomer); setRequestIdentity(null); reset(); }} />; }
 
   return <main className="delivery-page min-h-screen bg-[#fbf7f0] text-[#190620]">
     <header className="sticky top-0 z-40 border-b border-[#3a0a4d]/10 bg-[#fbf7f0]/90 backdrop-blur-xl"><div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4 md:h-20 md:px-8"><div className="flex min-w-0 items-center gap-2.5"><Link href="/" aria-label="Voltar para a página inicial"><BrandLogo compact /></Link><span aria-label={availability.message} title={availability.message} className={`inline-flex min-h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[10px] font-extrabold uppercase tracking-[.08em] ${availability.acceptingOrders ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}><i className={`h-1.5 w-1.5 rounded-full ${availability.acceptingOrders ? "bg-emerald-500" : "bg-amber-500"}`} />{availability.acceptingOrders ? "Aberto" : "Pausado"}</span></div><button onClick={() => { if (cart.length) { setKind("promo"); setStep(1); } }} className="flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-[#3a0a4d] px-3.5 text-sm font-bold text-white"><ShoppingBag size={18} /> {formatCurrency(total)}{cart.length > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#f8b900] px-1 text-[11px] text-[#24002f]">{cart.length}</span>}</button></div></header>
@@ -388,6 +392,6 @@ function ReviewLine({ label, value }: { label: string; value: string }) {
   return <div className="grid grid-cols-[90px_1fr] gap-3"><span className="text-[#817284]">{label}</span><strong className="min-w-0 break-words text-right">{value}</strong></div>;
 }
 function Field({ label, value, change, placeholder, type = "text" }: { label: string; value: string; change: SetText; placeholder: string; type?: string }) { const isPhone = type === "tel"; return <label className="grid min-w-0 gap-1.5 text-xs font-bold md:gap-2 md:text-sm">{label}<input type={type} inputMode={isPhone ? "numeric" : undefined} autoComplete={isPhone ? "tel" : undefined} maxLength={isPhone ? 15 : undefined} value={value} onChange={e => change(e.target.value)} placeholder={placeholder} className="min-h-11 min-w-0 rounded-xl border border-[#dfd2df] px-3 text-sm font-normal outline-none focus:border-[#6d2779] md:min-h-13 md:px-4" /></label>; }
-function Success({ code, restart }: { code: string; restart: () => void }) {
-  return <main className="grid min-h-screen place-items-center bg-[radial-gradient(circle_at_50%_20%,#5b126f,#24002f_62%)] px-5 py-10 text-white"><div className="w-full max-w-lg text-center"><span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#f8b900] text-[#24002f] shadow-[0_0_0_12px_rgba(248,185,0,.1)]"><Check size={36} strokeWidth={3} /></span><p className="mt-8 text-xs font-bold uppercase tracking-[.16em] text-[#f8b900]">Tudo certo</p><h1 className="mt-3 text-4xl font-extrabold tracking-[-.05em]">Pedido enviado</h1><p className="mx-auto mt-4 max-w-sm leading-relaxed text-white/70">Seu pedido chegou para a equipe da Manu.</p><div className="mx-auto mt-7 max-w-xs rounded-2xl border border-white/10 bg-white/10 p-4"><span className="text-xs text-white/60">Código do pedido</span><strong className="mt-1 block text-2xl tracking-[.08em]">#{code}</strong></div><div className="mx-auto mt-7 grid max-w-sm gap-2"><button onClick={restart} className="min-h-12 rounded-full border border-white/15 bg-white/10 px-7 font-bold text-white">Fazer outro pedido</button></div><Link href="/" className="mt-5 flex items-center justify-center gap-2 text-sm font-bold text-white/70"><ArrowLeft size={17} /> Voltar ao início</Link></div></main>;
+function Success({ code, trackingToken, restart }: { code: string; trackingToken: string; restart: () => void }) {
+  return <main className="grid min-h-screen place-items-center bg-[radial-gradient(circle_at_50%_20%,#5b126f,#24002f_62%)] px-5 py-10 text-white"><div className="w-full max-w-lg text-center"><span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#f8b900] text-[#24002f] shadow-[0_0_0_12px_rgba(248,185,0,.1)]"><Check size={36} strokeWidth={3} /></span><p className="mt-8 text-xs font-bold uppercase tracking-[.16em] text-[#f8b900]">Tudo certo</p><h1 className="mt-3 text-4xl font-extrabold tracking-[-.05em]">Pedido enviado</h1><p className="mx-auto mt-4 max-w-sm leading-relaxed text-white/70">Seu pedido chegou para a equipe da Manu.</p><div className="mx-auto mt-7 max-w-xs rounded-2xl border border-white/10 bg-white/10 p-4"><span className="text-xs text-white/60">Código do pedido</span><strong className="mt-1 block text-2xl tracking-[.08em]">#{code}</strong></div><div className="mx-auto mt-7 grid max-w-sm gap-2"><Link href={`/acompanhar/${code}?token=${encodeURIComponent(trackingToken)}`} className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-[#f8b900] px-7 font-extrabold text-[#24002f]">Acompanhar pedido <ArrowRight size={18} /></Link><button onClick={restart} className="min-h-12 rounded-full border border-white/15 bg-white/10 px-7 font-bold text-white">Fazer outro pedido</button></div><Link href="/" className="mt-5 flex items-center justify-center gap-2 text-sm font-bold text-white/70"><ArrowLeft size={17} /> Voltar ao início</Link></div></main>;
 }

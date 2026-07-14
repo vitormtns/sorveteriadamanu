@@ -4,14 +4,14 @@ import { ArrowLeft, Printer } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { useStore } from "@/components/store-provider";
+import { useOrders } from "@/components/orders-provider";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { formatPublicOrderCode } from "@/lib/order-code";
 import { paymentLabels } from "@/lib/settings";
 
 export default function PrintOrderPage() {
   const { id } = useParams<{ id: string }>();
-  const { orders, ready } = useStore();
+  const { orders, ready } = useOrders();
   const order = orders.find((item) => item.id === id);
   const receiptRef = useRef<HTMLElement>(null);
   const [pageHeightMm, setPageHeightMm] = useState(160);

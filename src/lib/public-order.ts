@@ -25,6 +25,7 @@ export interface PublicOrderRequest {
   notes?: string;
   items: PublicOrderItemInput[];
   idempotencyKey: string;
+  trackingToken: string;
 }
 
 export interface PublicOrderValidationFailure {
@@ -86,6 +87,7 @@ export function parsePublicOrderRequest(value: unknown): PublicOrderRequest | Pu
   const address = getOptionalText(value.address, "Endereço", 500);
   const notes = getOptionalText(value.notes, "Observação", 500);
   const idempotencyKey = value.idempotencyKey;
+  const trackingToken = value.trackingToken;
   if (isFailure(customerName)) return customerName;
   if (isFailure(address)) return address;
   if (isFailure(notes)) return notes;
@@ -94,6 +96,7 @@ export function parsePublicOrderRequest(value: unknown): PublicOrderRequest | Pu
   if (value.deliveryType === "delivery" && !address) return invalid("Endereço é obrigatório para entrega.");
   if (!paymentMethods.includes(value.paymentMethod as PaymentMethod)) return invalid("Forma de pagamento inválida.");
   if (typeof idempotencyKey !== "string" || !idempotencyPattern.test(idempotencyKey)) return invalid("Chave de envio inválida.");
+  if (typeof trackingToken !== "string" || !/^[A-Za-z0-9_-]{32,128}$/.test(trackingToken)) return invalid("Chave de acompanhamento inválida.");
   if (!Array.isArray(value.items) || value.items.length < 1 || value.items.length > 30) return invalid("Adicione entre 1 e 30 itens ao pedido.");
 
   const items: PublicOrderItemInput[] = [];
@@ -141,7 +144,7 @@ export function parsePublicOrderRequest(value: unknown): PublicOrderRequest | Pu
     });
   }
 
-  return { customerName, phone: rawPhone, deliveryType: value.deliveryType, address, paymentMethod: value.paymentMethod as PaymentMethod, notes, items, idempotencyKey };
+  return { customerName, phone: rawPhone, deliveryType: value.deliveryType, address, paymentMethod: value.paymentMethod as PaymentMethod, notes, items, idempotencyKey, trackingToken };
 }
 
 export function toPublicOrderRpcPayload(request: PublicOrderRequest) {
