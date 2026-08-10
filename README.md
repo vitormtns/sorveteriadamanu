@@ -1,74 +1,96 @@
-# Sorveteria da Manu
+# Manu Platform
 
-Sistema responsivo para catálogo público, delivery e operação interna da Sorveteria da Manu.
+Monorepo da plataforma da Manu. Nesta etapa, a Sorveteria da Manu permanece como a única aplicação implementada; os demais diretórios apenas reservam a estrutura das evoluções futuras.
 
-## Estado da migração
+## Estado atual
 
-Já usam Supabase:
+- **Sorveteria:** implementada em `apps/sorveteria`.
+- **Esfiharia:** futura; ainda sem aplicação.
+- **API compartilhada:** futura; as rotas existentes continuam no app da Sorveteria.
+- **Pacotes compartilhados:** estrutura preparada, ainda sem extração de código.
 
-- autenticação e profile único `owner`;
-- produtos, configurações e horários;
-- promoções, adicionais e sabores;
-- catálogo público da landing e do delivery.
+## Estrutura
 
-Ainda usam `localStorage`:
+```text
+apps/
+  sorveteria/   Aplicação Next.js atual
+  esfiharia/    Aplicação futura
+  api/          API compartilhada futura
+packages/
+  domain/       Tipos e regras de negócio futuros
+  database/     Acesso compartilhado a dados no futuro
+  validation/   Validações compartilhadas futuras
+  shared/       Recursos compartilhados futuros
+supabase/
+  migrations/   Migrations do banco, mantidas na raiz
+  seed.sql       Dados iniciais
+```
 
-- pedidos e acompanhamento;
-- filas operacionais e fechamento;
-- impressão existente.
+O repositório usa npm workspaces, com um único `package-lock.json` na raiz. Não há Turborepo, Nx, pnpm ou Yarn nesta estrutura.
 
-## Como executar
+## Como executar a Sorveteria
 
-Requisitos: Node.js 20 ou superior.
+Requisitos: Node.js 20 ou superior e npm.
+
+Na raiz do repositório:
 
 ```bash
 npm install
-npm run dev
+cp .env.example apps/sorveteria/.env.local
+npm run dev:sorveteria
 ```
 
-Copie `.env.example` para `.env.local` e configure:
+A aplicação estará disponível em `http://localhost:3000`. O comando `npm run dev` foi preservado como atalho para a Sorveteria.
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-chave-publica
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
-SUPABASE_SERVICE_ROLE_KEY=sua-chave-privada
-```
+## Variáveis de ambiente
 
-Em desenvolvimento, a ausência das variáveis públicas ativa um modo de demonstração explícito. Em produção, a aplicação mostra erro de configuração e não usa catálogo local silenciosamente.
-
-## Usuário administrativo
-
-Crie um usuário em **Authentication > Users**, copie o UUID e execute:
-
-```sql
-insert into public.profiles (id, name, role, active)
-values ('UUID_DO_AUTH_USER', 'Nome do responsável', 'owner', true);
-```
-
-Uma conta Auth sem profile `owner` ativo não acessa as rotas internas.
-
-## Recuperação de senha
-
-Configure a **Site URL** no Supabase e adicione às **Redirect URLs**:
+O modelo compartilhado permanece em `.env.example`, na raiz. A configuração usada pelo Next.js deve ficar em:
 
 ```text
-http://localhost:3000/auth/callback
-https://seu-dominio.com/auth/callback
+apps/sorveteria/.env.local
 ```
 
-O fluxo usa `/recuperar-senha` e `/redefinir-senha`.
+Arquivos `.env` e `.env.local` são ignorados pelo Git em qualquer diretório. Não versione chaves reais e não duplique segredos sem necessidade.
 
-## Rotas
+- `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY` são consumidas também pelo navegador.
+- `NEXT_PUBLIC_SITE_URL` deve conter a origem pública da Sorveteria, sem mudar as rotas existentes.
+- `SUPABASE_SERVICE_ROLE_KEY` é exclusiva do servidor e nunca deve ser exposta em Client Components, respostas ou logs.
+- `PUBLIC_ORDER_RATE_LIMIT_SALT` é exclusiva do servidor e deve ser longa, aleatória e diferente em cada ambiente.
 
-- Públicas: `/`, `/delivery`, `/acompanhar/*`, `/login`, `/recuperar-senha`, `/redefinir-senha`.
-- Protegidas: `/sistema`, `/pedidos/*`, `/produtos`, `/configuracoes`.
+Em desenvolvimento, a ausência das variáveis públicas ativa o modo de demonstração já existente. Em produção, todas as variáveis necessárias devem estar configuradas.
 
-Mais detalhes estão em [`supabase/README.md`](supabase/README.md).
-
-## Validação
+## Comandos principais
 
 ```bash
+npm run dev:sorveteria
+npm run test:sorveteria
+npm run lint:sorveteria
+npm run build:sorveteria
+```
+
+Os comandos anteriores continuam disponíveis na raiz e apontam para a Sorveteria:
+
+```bash
+npm test
 npm run lint
 npm run build
+npm start
 ```
+
+## Supabase
+
+O diretório `supabase` permanece na raiz porque será compartilhado pelas operações da plataforma no futuro. As migrations aplicadas continuam em `supabase/migrations` e não devem ser editadas retroativamente.
+
+Consulte [`supabase/README.md`](supabase/README.md) para implantação, seed, autenticação, RLS e geração de tipos.
+
+## Rotas preservadas
+
+As URLs públicas e internas continuam iguais, incluindo:
+
+- `/`, `/delivery`, `/login`, `/recuperar-senha` e `/redefinir-senha`;
+- `/sistema`, `/pedidos`, `/pedidos/novo`, `/produtos` e `/configuracoes`;
+- `/acompanhar/[id]`, `/api/orders`, `/api/orders/tracking` e `/auth/callback`.
+
+## Deploy
+
+O deploy não foi migrado nesta etapa. Quando a hospedagem for ajustada para o monorepo, o diretório-base do app da Sorveteria deverá ser `apps/sorveteria`.
