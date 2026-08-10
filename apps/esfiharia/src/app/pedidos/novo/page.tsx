@@ -24,6 +24,20 @@ export default function NewOrderPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const products = snapshot?.products ?? [];
+  const paymentMethods = snapshot?.settings?.acceptedPaymentMethods ?? [];
+  const allowPickup = snapshot?.settings?.allowPickup ?? false;
+  const allowDelivery = snapshot?.settings?.allowDelivery ?? false;
+  const selectedPaymentMethod = paymentMethods.includes(form.paymentMethod)
+    ? form.paymentMethod
+    : (paymentMethods[0] ?? form.paymentMethod);
+  const selectedDeliveryType =
+    form.deliveryType === "pickup" && allowPickup
+      ? "pickup"
+      : form.deliveryType === "delivery" && allowDelivery
+        ? "delivery"
+        : allowPickup
+          ? "pickup"
+          : "delivery";
   const selected = products.filter(
     (product) => items[product.id]?.quantity > 0,
   );
@@ -42,7 +56,10 @@ export default function NewOrderPage() {
   }
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!snapshot || !selected.length) return;
+    if (!snapshot?.store.active || !selected.length) {
+      setError("Ative a Esfiharia antes de criar pedidos.");
+      return;
+    }
     setSaving(true);
     setError("");
     const client = createBrowserSupabaseClient();
@@ -51,7 +68,7 @@ export default function NewOrderPage() {
       {
         p_store_id: snapshot.store.id,
         p_customer_name: form.customerName,
-        p_payment_method: form.paymentMethod,
+        p_payment_method: selectedPaymentMethod,
         p_items: selected.map((product) => ({
           product_id: product.id,
           quantity: items[product.id].quantity,
@@ -61,7 +78,7 @@ export default function NewOrderPage() {
         p_phone: form.phone || null,
         p_notes: form.notes || null,
         p_payment_status: form.paymentStatus,
-        p_delivery_type: form.deliveryType,
+        p_delivery_type: selectedDeliveryType,
         p_address: form.address || null,
         p_delivery_fee: 0,
         p_discount: 0,
@@ -83,6 +100,12 @@ export default function NewOrderPage() {
           <p className="muted">Fluxo simples, sem builders ou adicionais.</p>
         </div>
       </div>
+      {!snapshot?.store.active && (
+        <p className="notice">
+          A Esfiharia está inativa. Conclua a configuração e faça a ativação
+          antes de criar pedidos.
+        </p>
+      )}
       <form onSubmit={submit}>
         <div className="menu-layout">
           <section>
@@ -171,7 +194,7 @@ export default function NewOrderPage() {
               <label htmlFor="payment">Pagamento</label>
               <select
                 id="payment"
-                value={form.paymentMethod}
+                value={selectedPaymentMethod}
                 onChange={(event) =>
                   setForm({
                     ...form,
@@ -179,7 +202,7 @@ export default function NewOrderPage() {
                   })
                 }
               >
-                {["Pix", "Dinheiro", "Cartão", "A combinar"].map((method) => (
+                {paymentMethods.map((method) => (
                   <option key={method}>{method}</option>
                 ))}
               </select>
@@ -201,7 +224,7 @@ export default function NewOrderPage() {
               <label htmlFor="delivery">Recebimento</label>
               <select
                 id="delivery"
-                value={form.deliveryType}
+                value={selectedDeliveryType}
                 onChange={(event) =>
                   setForm({
                     ...form,
@@ -209,11 +232,15 @@ export default function NewOrderPage() {
                   })
                 }
               >
-                <option value="pickup">Retirada</option>
-                <option value="delivery">Entrega</option>
+                <option value="pickup" disabled={!allowPickup}>
+                  Retirada
+                </option>
+                <option value="delivery" disabled={!allowDelivery}>
+                  Entrega
+                </option>
               </select>
             </div>
-            {form.deliveryType === "delivery" && (
+            {selectedDeliveryType === "delivery" && (
               <div className="field">
                 <label htmlFor="address">Endereço</label>
                 <textarea
@@ -244,7 +271,13 @@ export default function NewOrderPage() {
             <button
               className="btn"
               style={{ width: "100%" }}
-              disabled={!selected.length || saving}
+              disabled={
+                !snapshot?.store.active ||
+                !selected.length ||
+                !paymentMethods.length ||
+                (!allowPickup && !allowDelivery) ||
+                saving
+              }
             >
               {saving ? "Salvando..." : "Salvar pedido"}
             </button>

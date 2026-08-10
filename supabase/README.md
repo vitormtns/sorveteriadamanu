@@ -76,6 +76,8 @@ O arquivo atual `apps/sorveteria/src/data/supabase/database.types.ts` foi escrit
 - `order_items` guarda snapshot de nome, categoria e preço para preservar o pedido mesmo que o produto seja alterado.
 - `order_status_history` registra mudanças operacionais por trigger simples. Não é Event Sourcing.
 - `create_internal_order` cria pedido interno de forma atômica. Itens com `product_id` usam preço do banco; itens sem `product_id` são manuais e autenticados.
+- `get_store_readiness` verifica os requisitos mínimos de uma operação e `activate_store` é a única operação concedida ao frontend para ativar uma store.
+- Um trigger bloqueia novos pedidos públicos ou internos enquanto a store estiver inativa, independentemente da validação da interface.
 - Endereço obrigatório para delivery será validado pela operação de servidor, não por `CHECK`, para evitar bloqueios em migrações e correções operacionais.
 - Opções e preços dos montadores do delivery ficam em `delivery_builder_options`. O navegador usa esses valores apenas para prévia; a RPC calcula novamente cada preço no banco.
 

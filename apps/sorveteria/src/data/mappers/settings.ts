@@ -117,6 +117,6 @@ export function mapBusinessHoursToDatabase(settings: StoreSettings): Omit<Databa
   }));
 }
 
-function formatTime(value: string): string {
-  return value.slice(0, 5);
+function formatTime(value: string | null): string {
+  return value?.slice(0, 5) ?? "";
 }

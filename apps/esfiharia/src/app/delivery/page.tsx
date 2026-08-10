@@ -5,6 +5,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { useStore } from "@/components/store-provider";
 import { formatMoney } from "@/lib/format";
+import { canAcceptOrders } from "@/lib/public-order";
 import { DeliveryType, PaymentMethod, Product } from "@/lib/types";
 
 export default function DeliveryPage() {
@@ -44,14 +45,22 @@ export default function DeliveryPage() {
       ? products
       : products.filter((product) => product.category === category);
   const settings = snapshot?.settings;
+  const selectedPaymentMethod = settings?.acceptedPaymentMethods.includes(
+    form.paymentMethod,
+  )
+    ? form.paymentMethod
+    : (settings?.acceptedPaymentMethods[0] ?? form.paymentMethod);
+  const selectedDeliveryType =
+    form.deliveryType === "pickup" && settings?.allowPickup
+      ? "pickup"
+      : form.deliveryType === "delivery" && settings?.allowDelivery
+        ? "delivery"
+        : settings?.allowPickup
+          ? "pickup"
+          : "delivery";
   const fee =
-    form.deliveryType === "delivery" ? (settings?.deliveryFee ?? 0) : 0;
-  const canOrder = Boolean(
-    snapshot?.store.active &&
-      settings?.deliveryOpen &&
-      !settings.paused &&
-      !settings.closedToday,
-  );
+    selectedDeliveryType === "delivery" ? (settings?.deliveryFee ?? 0) : 0;
+  const canOrder = canAcceptOrders(snapshot);
 
   async function checkout(event: FormEvent) {
     event.preventDefault();
@@ -65,6 +74,8 @@ export default function DeliveryPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          paymentMethod: selectedPaymentMethod,
+          deliveryType: selectedDeliveryType,
           idempotencyKey: crypto.randomUUID(),
           trackingToken: token,
           items: cart.map((item) => ({
@@ -242,7 +253,7 @@ export default function DeliveryPage() {
                   <label htmlFor="type">Recebimento</label>
                   <select
                     id="type"
-                    value={form.deliveryType}
+                    value={selectedDeliveryType}
                     onChange={(event) =>
                       setForm({
                         ...form,
@@ -261,7 +272,7 @@ export default function DeliveryPage() {
                     </option>
                   </select>
                 </div>
-                {form.deliveryType === "delivery" && (
+                {selectedDeliveryType === "delivery" && (
                   <div className="field">
                     <label htmlFor="address">Endereço</label>
                     <textarea
@@ -278,7 +289,7 @@ export default function DeliveryPage() {
                   <label htmlFor="payment">Pagamento</label>
                   <select
                     id="payment"
-                    value={form.paymentMethod}
+                    value={selectedPaymentMethod}
                     onChange={(event) =>
                       setForm({
                         ...form,
@@ -286,7 +297,7 @@ export default function DeliveryPage() {
                       })
                     }
                   >
-                    {(settings?.acceptedPaymentMethods ?? ["Pix"]).map(
+                    {(settings?.acceptedPaymentMethods ?? []).map(
                       (payment) => (
                         <option key={payment}>{payment}</option>
                       ),

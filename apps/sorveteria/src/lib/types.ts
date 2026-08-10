@@ -1,4 +1,4 @@
-export type ProductCategory = "Açaí" | "Sorvetes" | "Milk-shakes" | "Sobremesas" | "Promoções" | "Bebidas" | "Outros";
+export type ProductCategory = "Açaí" | "Sorvetes" | "Milk-shakes" | "Esfihas" | "Sobremesas" | "Promoções" | "Bebidas" | "Outros";
 export type PaymentMethod = "Pix" | "Dinheiro" | "Cartão" | "A combinar";
 export type LegacyPaymentMethod = "Fiado/Outro";
 export type LegacyOrderStatus = "pending_payment" | "paid" | "canceled";

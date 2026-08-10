@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveConfiguredStore } from "@/lib/current-store";
-import { BusinessHour, Product, StoreSettings } from "@/lib/types";
+import { parseProductCategory } from "@/lib/product";
+import { belongsToStore } from "@/lib/store-scope";
+import {
+  BusinessHour,
+  Product,
+  StoreSettings,
+} from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,24 +44,26 @@ export async function GET() {
     if (productsResult.error || settingsResult.error || hoursResult.error)
       throw productsResult.error ?? settingsResult.error ?? hoursResult.error;
 
-    const products: Product[] = (productsResult.data ?? []).map((row) => ({
-      id: row.id,
-      storeId: row.store_id,
-      name: row.name,
-      category: row.category,
-      description: row.description ?? undefined,
-      price: Number(row.price),
-      active: row.active,
-      availableToday: row.available_today,
-      featured: row.featured,
-      displayOrder: row.display_order,
-      imageUrl: row.image_url ?? undefined,
-    }));
+    const products: Product[] = (productsResult.data ?? [])
+      .filter((row) => belongsToStore(row.store_id, store.id))
+      .map((row) => ({
+        id: row.id,
+        storeId: row.store_id,
+        name: row.name,
+        category: parseProductCategory(row.category),
+        description: row.description ?? undefined,
+        price: Number(row.price),
+        active: row.active,
+        availableToday: row.available_today,
+        featured: row.featured,
+        displayOrder: row.display_order,
+        imageUrl: row.image_url ?? undefined,
+      }));
     const hours: BusinessHour[] = (hoursResult.data ?? []).map((row) => ({
       weekday: row.weekday,
       enabled: row.enabled,
-      open: row.open_time.slice(0, 5),
-      close: row.close_time.slice(0, 5),
+      open: row.open_time?.slice(0, 5) ?? "",
+      close: row.close_time?.slice(0, 5) ?? "",
     }));
     const row = settingsResult.data;
     const settings: StoreSettings | null = row

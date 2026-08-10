@@ -2,6 +2,12 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useStore } from "@/components/store-provider";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import {
+  activationDisabled,
+  parseStoreReadiness,
+  readinessItems,
+  StoreReadiness,
+} from "@/lib/store-readiness";
 import { PaymentMethod } from "@/lib/types";
 const weekdays = [
   "Domingo",
@@ -38,25 +44,25 @@ const initial: FormState = {
   paused: true,
   temporaryPause: false,
   closedToday: false,
-  closedMessage: "A loja está fechada no momento.",
-  allowPickup: true,
-  allowDelivery: true,
+  closedMessage: "",
+  allowPickup: false,
+  allowDelivery: false,
   deliveryFee: "0",
   minimumOrder: "0",
-  payments: ["Pix", "Dinheiro"],
+  payments: [],
   pixKey: "",
   paymentNote: "",
   whatsapp: "",
   instagram: "",
   address: "",
-  headline: "Esfihas feitas para chegar quentinhas.",
+  headline: "",
   subtitle: "",
   displayedHours: "",
   hours: weekdays.map((_, weekday) => ({
     weekday,
     enabled: false,
-    open: "18:00",
-    close: "22:00",
+    open: "",
+    close: "",
   })),
 };
 export default function SettingsPage() {
@@ -64,6 +70,9 @@ export default function SettingsPage() {
   const client = useMemo(() => createBrowserSupabaseClient(), []);
   const [form, setForm] = useState<FormState>(initial);
   const [exists, setExists] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [readiness, setReadiness] = useState<StoreReadiness | null>(null);
+  const [activating, setActivating] = useState(false);
   const [hidden, setHidden] = useState({
     promotions: [] as Record<string, unknown>[],
     addOns: [] as Record<string, unknown>[],
@@ -71,23 +80,26 @@ export default function SettingsPage() {
   });
   const [message, setMessage] = useState("");
   const load = useCallback(async () => {
-    if (!client || !snapshot?.store.active) return;
+    if (!client || !snapshot) return;
     const id = snapshot.store.id;
-    const [settings, hours, promotions, addOns, flavors] = await Promise.all([
-      client
-        .from("store_settings")
-        .select("*")
-        .eq("store_id", id)
-        .maybeSingle(),
-      client
-        .from("business_hours")
-        .select("*")
-        .eq("store_id", id)
-        .order("weekday"),
-      client.from("promotions").select("*").eq("store_id", id),
-      client.from("add_ons").select("*").eq("store_id", id),
-      client.from("flavors").select("*").eq("store_id", id),
-    ]);
+    const [settings, hours, promotions, addOns, flavors, readinessResult] =
+      await Promise.all([
+        client
+          .from("store_settings")
+          .select("*")
+          .eq("store_id", id)
+          .maybeSingle(),
+        client
+          .from("business_hours")
+          .select("*")
+          .eq("store_id", id)
+          .order("weekday"),
+        client.from("promotions").select("*").eq("store_id", id),
+        client.from("add_ons").select("*").eq("store_id", id),
+        client.from("flavors").select("*").eq("store_id", id),
+        client.rpc("get_store_readiness", { p_store_id: id }),
+      ]);
+    setReadiness(parseStoreReadiness(readinessResult.data));
     setHidden({
       promotions: promotions.data ?? [],
       addOns: addOns.data ?? [],
@@ -95,6 +107,7 @@ export default function SettingsPage() {
     });
     if (!settings.data) {
       setExists(false);
+      setLoaded(true);
       return;
     }
     const row = settings.data;
@@ -123,11 +136,12 @@ export default function SettingsPage() {
         return {
           weekday,
           enabled: hour?.enabled ?? false,
-          open: hour?.open_time?.slice(0, 5) ?? "18:00",
-          close: hour?.close_time?.slice(0, 5) ?? "22:00",
+          open: hour?.open_time?.slice(0, 5) ?? "",
+          close: hour?.close_time?.slice(0, 5) ?? "",
         };
       }),
     });
+    setLoaded(true);
   }, [client, snapshot]);
   useEffect(() => {
     queueMicrotask(() => void load());
@@ -146,6 +160,18 @@ export default function SettingsPage() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!client || !snapshot) return;
+    if (
+      form.hours.some(
+        (hour) =>
+          hour.enabled &&
+          (!hour.open || !hour.close || hour.open === hour.close),
+      )
+    ) {
+      setMessage(
+        "Informe horários de abertura e fechamento diferentes para os dias habilitados.",
+      );
+      return;
+    }
     const { error } = await client.rpc("save_store_configuration", {
       p_store_id: snapshot.store.id,
       p_settings: {
@@ -173,8 +199,8 @@ export default function SettingsPage() {
       p_business_hours: form.hours.map((hour) => ({
         weekday: hour.weekday,
         enabled: hour.enabled,
-        open_time: hour.open,
-        close_time: hour.close,
+        open_time: hour.open || null,
+        close_time: hour.close || null,
       })),
       p_promotions: hidden.promotions,
       p_add_ons: hidden.addOns,
@@ -185,6 +211,24 @@ export default function SettingsPage() {
         ? "Não foi possível salvar as configurações."
         : "Configurações salvas com sucesso.",
     );
+    if (!error) await load();
+  }
+  async function activate() {
+    if (!client || !snapshot || activationDisabled(readiness, activating))
+      return;
+    setActivating(true);
+    setMessage("");
+    const { error } = await client.rpc("activate_store", {
+      p_store_id: snapshot.store.id,
+    });
+    if (error) {
+      setMessage(error.message);
+      setActivating(false);
+      await load();
+      return;
+    }
+    setMessage("Esfiharia ativada com sucesso.");
+    location.reload();
   }
   function payment(method: PaymentMethod, checked: boolean) {
     setForm({
@@ -194,6 +238,12 @@ export default function SettingsPage() {
         : form.payments.filter((item) => item !== method),
     });
   }
+  if (!loaded)
+    return (
+      <main className="admin-content">
+        <div className="empty">Carregando configurações...</div>
+      </main>
+    );
   if (!exists)
     return (
       <main className="admin-content">
@@ -228,6 +278,38 @@ export default function SettingsPage() {
         </div>
       </div>
       <form onSubmit={submit}>
+        <section className="panel">
+          <h2>Pronto para abrir?</h2>
+          <p className="muted">
+            A ativação é manual e só fica disponível quando todos os requisitos
+            obrigatórios estão concluídos.
+          </p>
+          <div className="feature-grid">
+            {readinessItems.map((item) => {
+              const complete = readiness?.requirements[item.key] ?? false;
+              return (
+                <div className="total-row" key={item.key}>
+                  <span>{item.label}</span>
+                  <strong>{complete ? "Concluído" : "Pendente"}</strong>
+                  {!item.required && <small>Recomendado</small>}
+                </div>
+              );
+            })}
+          </div>
+          {!snapshot?.store.active && readiness?.ready && (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => void activate()}
+              disabled={activationDisabled(readiness, activating)}
+            >
+              {activating ? "Ativando..." : "Ativar Esfiharia"}
+            </button>
+          )}
+          {snapshot?.store.active && (
+            <p className="notice">A Esfiharia está ativa.</p>
+          )}
+        </section>
         <section className="panel">
           <h2>Disponibilidade</h2>
           <div className="feature-grid">

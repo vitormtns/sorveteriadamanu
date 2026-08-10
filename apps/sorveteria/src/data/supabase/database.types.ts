@@ -114,6 +114,18 @@ export interface Database {
         };
         Returns: string;
       };
+      initialize_store_configuration: {
+        Args: { p_store_id: string };
+        Returns: DatabaseStoreSettings;
+      };
+      get_store_readiness: {
+        Args: { p_store_id: string };
+        Returns: Json;
+      };
+      activate_store: {
+        Args: { p_store_id: string };
+        Returns: DatabaseStore;
+      };
       consume_public_order_rate_limit: {
         Args: {
           p_store_slug: string;
@@ -216,7 +228,7 @@ export interface Database {
 }
 
 export type DatabaseProfileRole = "owner" | "attendant";
-export type DatabaseProductCategory = "Açaí" | "Sorvetes" | "Milk-shakes" | "Sobremesas" | "Promoções" | "Bebidas" | "Outros";
+export type DatabaseProductCategory = "Açaí" | "Sorvetes" | "Milk-shakes" | "Esfihas" | "Sobremesas" | "Promoções" | "Bebidas" | "Outros";
 export type DatabasePaymentMethod = "Pix" | "Dinheiro" | "Cartão" | "A combinar";
 export type DatabasePaymentStatus = "pending" | "paid";
 export type DatabaseOrderStatus = "new" | "preparing" | "ready" | "delivered" | "canceled";
@@ -420,8 +432,8 @@ export type DatabaseBusinessHour = {
   store_id: string;
   weekday: number;
   enabled: boolean;
-  open_time: string;
-  close_time: string;
+  open_time: string | null;
+  close_time: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -38,11 +38,11 @@ export async function proxy(request: NextRequest) {
   const admin = createClient(url, service, { auth: { persistSession: false } });
   const { data: store } = await admin
     .from("stores")
-    .select("id, active")
+    .select("id")
     .eq("slug", getCurrentStoreSlug())
     .maybeSingle();
-  if (!store?.active)
-    return redirect(request, response, "/login?erro=loja_inativa");
+  if (!store)
+    return redirect(request, response, "/login?erro=configuracao");
   const [profile, membership] = await Promise.all([
     client
       .from("profiles")

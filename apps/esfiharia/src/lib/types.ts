@@ -1,4 +1,13 @@
 export type PaymentMethod = "Pix" | "Dinheiro" | "Cartão" | "A combinar";
+export type ProductCategory =
+  | "Açaí"
+  | "Sorvetes"
+  | "Milk-shakes"
+  | "Esfihas"
+  | "Sobremesas"
+  | "Promoções"
+  | "Bebidas"
+  | "Outros";
 export type DeliveryType = "pickup" | "delivery";
 export type OrderStatus =
   | "new"
@@ -20,7 +29,7 @@ export interface Product {
   id: string;
   storeId: string;
   name: string;
-  category: string;
+  category: ProductCategory;
   description?: string;
   price: number;
   active: boolean;

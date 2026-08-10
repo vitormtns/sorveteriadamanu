@@ -114,7 +114,16 @@ export function canAcceptOrders(snapshot: StorefrontSnapshot | null): boolean {
     snapshot?.store.active &&
       snapshot.settings?.deliveryOpen &&
       !snapshot.settings.paused &&
-      !snapshot.settings.closedToday,
+      !snapshot.settings.closedToday &&
+      snapshot.settings.acceptedPaymentMethods.length > 0 &&
+      (snapshot.settings.allowPickup || snapshot.settings.allowDelivery) &&
+      snapshot.settings.hours.some(
+        (hour) =>
+          hour.enabled &&
+          Boolean(hour.open) &&
+          Boolean(hour.close) &&
+          hour.open !== hour.close,
+      ),
   );
 }
 

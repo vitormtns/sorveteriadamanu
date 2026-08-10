@@ -3,10 +3,28 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { useStore } from "@/components/store-provider";
 import { formatMoney } from "@/lib/format";
-import { Product } from "@/lib/types";
-const empty = {
+import {
+  esfihariaProductCategories,
+  parseProductCategory,
+} from "@/lib/product";
+import { belongsToStore } from "@/lib/store-scope";
+import { Product, ProductCategory } from "@/lib/types";
+
+interface ProductForm {
+  name: string;
+  category: ProductCategory;
+  description: string;
+  price: string;
+  active: boolean;
+  availableToday: boolean;
+  featured: boolean;
+  displayOrder: string;
+  imageUrl: string;
+}
+
+const empty: ProductForm = {
   name: "",
-  category: "Outros",
+  category: "Esfihas",
   description: "",
   price: "",
   active: true,
@@ -23,7 +41,7 @@ export default function ProductsPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState("");
   const load = useCallback(async () => {
-    if (!client || !snapshot?.store.active) return;
+    if (!client || !snapshot) return;
     const { data, error: loadError } = await client
       .from("products")
       .select("*")
@@ -34,19 +52,21 @@ export default function ProductsPage() {
       return;
     }
     setProducts(
-      (data ?? []).map((row) => ({
-        id: row.id,
-        storeId: row.store_id,
-        name: row.name,
-        category: row.category,
-        description: row.description ?? undefined,
-        price: Number(row.price),
-        active: row.active,
-        availableToday: row.available_today,
-        featured: row.featured,
-        displayOrder: row.display_order,
-        imageUrl: row.image_url ?? undefined,
-      })),
+      (data ?? [])
+        .filter((row) => belongsToStore(row.store_id, snapshot.store.id))
+        .map((row) => ({
+          id: row.id,
+          storeId: row.store_id,
+          name: row.name,
+          category: parseProductCategory(row.category),
+          description: row.description ?? undefined,
+          price: Number(row.price),
+          active: row.active,
+          availableToday: row.available_today,
+          featured: row.featured,
+          displayOrder: row.display_order,
+          imageUrl: row.image_url ?? undefined,
+        })),
     );
   }, [client, snapshot]);
   useEffect(() => {
@@ -230,14 +250,15 @@ export default function ProductsPage() {
                 id="category"
                 value={form.category}
                 onChange={(event) =>
-                  setForm({ ...form, category: event.target.value })
+                  setForm({
+                    ...form,
+                    category: event.target.value as ProductCategory,
+                  })
                 }
               >
-                {["Outros", "Bebidas", "Promoções", "Sobremesas"].map(
-                  (category) => (
-                    <option key={category}>{category}</option>
-                  ),
-                )}
+                {esfihariaProductCategories.map((category) => (
+                  <option key={category}>{category}</option>
+                ))}
               </select>
             </div>
             <div className="field">

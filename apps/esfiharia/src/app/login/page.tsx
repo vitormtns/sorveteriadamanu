@@ -23,11 +23,11 @@ function LoginForm() {
   const [error, setError] = useState("");
   const reason = query.get("erro");
   const redirectError =
-    reason === "loja_inativa"
-      ? "Loja ainda não ativada."
-      : reason === "acesso"
+    reason === "acesso"
         ? "Sua conta não possui acesso à Esfiharia."
-        : "";
+        : reason === "configuracao"
+          ? "A configuração do servidor está indisponível."
+          : "";
   async function submit(event: FormEvent) {
     event.preventDefault();
     setLoading(true);
@@ -73,13 +73,7 @@ function LoginForm() {
       setLoading(false);
       return;
     }
-    if (!snapshot.store.active) {
-      await client.auth.signOut();
-      setError("Loja ainda não ativada.");
-      setLoading(false);
-      return;
-    }
-    location.href = "/sistema";
+    location.href = snapshot.store.active ? "/sistema" : "/configuracoes";
   }
   return (
     <main className="auth-page">
