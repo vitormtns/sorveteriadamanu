@@ -1,18 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  calculateAcaiAddOnPrice,
-  canMeetMinimumOrder,
-  isWithinBusinessHours,
-  parsePublicOrderRequest,
-  publicOrderError,
-  roundMoney,
-} from "../src/lib/public-order.ts";
+import { calculateAcaiAddOnPrice, canMeetMinimumOrder, isWithinBusinessHours, parsePublicOrderRequest, publicOrderError, roundMoney } from "../src/lib/public-order.ts";
 import { getOrderAgeLabel, getOrderItemDetails } from "../src/lib/order-operational.ts";
 import { shouldPollTracking, shouldRefreshForOrderEvent } from "../src/lib/order-sync.ts";
 import { getCurrentStoreSlug, normalizeStoreSlug } from "../src/lib/store-config.ts";
 import { filterByStore, realtimeStoreFilter, resourceIdsBelongToStore, totalByStore } from "../src/lib/store-scope.ts";
 import { numericToNumber } from "../src/data/mappers/numeric.ts";
+import { isInternalStoreRoute, parseStorefrontResponse, shouldFetchStorefrontOnMount } from "../src/lib/storefront.ts";
 
 const ids = {
   format: "00000000-0000-4000-8000-000000000002",
@@ -38,7 +32,10 @@ test("filtra catálogo e pedidos pela store atual", () => {
     { id: "e1", storeId: storeIds.esfiharia, total: 99 },
     { id: "s2", storeId: storeIds.sorveteria, total: 15 },
   ];
-  assert.deepEqual(filterByStore(rows, storeIds.sorveteria).map((row) => row.id), ["s1", "s2"]);
+  assert.deepEqual(
+    filterByStore(rows, storeIds.sorveteria).map((row) => row.id),
+    ["s1", "s2"],
+  );
   assert.equal(totalByStore(rows, storeIds.sorveteria), 25);
 });
 
@@ -88,7 +85,17 @@ test("valida payload público e descarta preços enviados pelo navegador", () =>
     idempotencyKey: "pedido-publico-valido-20260714",
     trackingToken: "12345678901234567890123456789012",
     total: 0.37,
-    items: [{ builderType: "ice_cream", quantity: 1, formatId: ids.format, scoopId: ids.scoop, toppingId: ids.topping, flavorIds: [ids.flavor], unitPrice: 0.37 }],
+    items: [
+      {
+        builderType: "ice_cream",
+        quantity: 1,
+        formatId: ids.format,
+        scoopId: ids.scoop,
+        toppingId: ids.topping,
+        flavorIds: [ids.flavor],
+        unitPrice: 0.37,
+      },
+    ],
   });
   assert.equal("code" in parsed, false);
   if ("code" in parsed) return;
@@ -98,14 +105,43 @@ test("valida payload público e descarta preços enviados pelo navegador", () =>
 });
 
 test("rejeita campos obrigatórios, IDs inválidos e repetição de sabores", () => {
-  const missingAddress = parsePublicOrderRequest({ customerName: "Cliente", phone: "11999998888", deliveryType: "delivery", paymentMethod: "Pix", idempotencyKey: "pedido-publico-invalido-1", trackingToken: "12345678901234567890123456789012", items: [] });
+  const missingAddress = parsePublicOrderRequest({
+    customerName: "Cliente",
+    phone: "11999998888",
+    deliveryType: "delivery",
+    paymentMethod: "Pix",
+    idempotencyKey: "pedido-publico-invalido-1",
+    trackingToken: "12345678901234567890123456789012",
+    items: [],
+  });
   assert.equal("code" in missingAddress && missingAddress.code, "PAYLOAD_INVALID");
-  const repeatedFlavor = parsePublicOrderRequest({ customerName: "Cliente", phone: "11999998888", deliveryType: "pickup", paymentMethod: "Pix", idempotencyKey: "pedido-publico-invalido-2", trackingToken: "12345678901234567890123456789012", items: [{ builderType: "ice_cream", quantity: 1, formatId: ids.format, scoopId: ids.scoop, toppingId: ids.topping, flavorIds: [ids.flavor, ids.flavor] }] });
+  const repeatedFlavor = parsePublicOrderRequest({
+    customerName: "Cliente",
+    phone: "11999998888",
+    deliveryType: "pickup",
+    paymentMethod: "Pix",
+    idempotencyKey: "pedido-publico-invalido-2",
+    trackingToken: "12345678901234567890123456789012",
+    items: [
+      {
+        builderType: "ice_cream",
+        quantity: 1,
+        formatId: ids.format,
+        scoopId: ids.scoop,
+        toppingId: ids.topping,
+        flavorIds: [ids.flavor, ids.flavor],
+      },
+    ],
+  });
   assert.equal("code" in repeatedFlavor && repeatedFlavor.code, "PAYLOAD_INVALID");
 });
 
 test("mapeia conflitos de idempotência sem expor erro do banco", () => {
-  assert.deepEqual(publicOrderError(409, "IDEMPOTENCY_CONFLICT"), { status: 409, code: "IDEMPOTENCY_CONFLICT", message: "Este envio já foi usado para um pedido diferente." });
+  assert.deepEqual(publicOrderError(409, "IDEMPOTENCY_CONFLICT"), {
+    status: 409,
+    code: "IDEMPOTENCY_CONFLICT",
+    message: "Este envio já foi usado para um pedido diferente.",
+  });
 });
 
 test("transforma detalhes JSONB em instruções claras para a operação", () => {
@@ -114,7 +150,10 @@ test("transforma detalhes JSONB em instruções claras para a operação", () =>
     productName: "Milk-shake 500 ml",
     quantity: 1,
     unitPrice: 22,
-    details: { flavors: [{ name: "Morango" }], topping: { name: "Leite condensado" } },
+    details: {
+      flavors: [{ name: "Morango" }],
+      topping: { name: "Leite condensado" },
+    },
     notes: "Sem canudo",
   });
   assert.deepEqual(details, ["Sabor: Morango", "Cobertura: Leite condensado", "Obs. do item: Sem canudo"]);
@@ -136,9 +175,39 @@ test("atualiza os textos relativos do pedido a partir do relógio compartilhado"
   };
 
   assert.equal(getOrderAgeLabel({ ...baseOrder, orderStatus: "new" }, now), "Aguardando há 1 h 10 min");
-  assert.equal(getOrderAgeLabel({ ...baseOrder, orderStatus: "new", createdAt: "2026-07-14T18:08:00.000Z" }, now), "Aguardando há 2 min");
-  assert.equal(getOrderAgeLabel({ ...baseOrder, orderStatus: "preparing", preparingAt: "2026-07-14T18:09:00.000Z" }, now), "Em preparo há 1 min");
-  assert.equal(getOrderAgeLabel({ ...baseOrder, orderStatus: "ready", readyAt: "2026-07-14T18:10:00.000Z" }, now), "Pronto agora");
+  assert.equal(
+    getOrderAgeLabel(
+      {
+        ...baseOrder,
+        orderStatus: "new",
+        createdAt: "2026-07-14T18:08:00.000Z",
+      },
+      now,
+    ),
+    "Aguardando há 2 min",
+  );
+  assert.equal(
+    getOrderAgeLabel(
+      {
+        ...baseOrder,
+        orderStatus: "preparing",
+        preparingAt: "2026-07-14T18:09:00.000Z",
+      },
+      now,
+    ),
+    "Em preparo há 1 min",
+  );
+  assert.equal(
+    getOrderAgeLabel(
+      {
+        ...baseOrder,
+        orderStatus: "ready",
+        readyAt: "2026-07-14T18:10:00.000Z",
+      },
+      now,
+    ),
+    "Pronto agora",
+  );
 });
 
 test("controla polling público e eventos de pedido sem atualizar estados finais", () => {
@@ -149,4 +218,55 @@ test("controla polling público e eventos de pedido sem atualizar estados finais
   assert.equal(shouldRefreshForOrderEvent("INSERT"), true);
   assert.equal(shouldRefreshForOrderEvent("UPDATE"), true);
   assert.equal(shouldRefreshForOrderEvent("DELETE"), false);
+});
+
+test("usa o storefront inicial sem repetir o request no mount", () => {
+  const initialData = {
+    store: {
+      id: storeIds.sorveteria,
+      slug: "sorveteria",
+      name: "Sorveteria da Manu",
+      type: "sorveteria",
+    },
+    catalog: {
+      products: [],
+      promotions: [],
+      addOns: [],
+      iceCreamFlavors: [],
+      milkshakeFlavors: [],
+      deliveryBuilderOptions: [],
+    },
+    settings: {
+      version: 1,
+      status: {
+        deliveryOpen: true,
+        pauseOnlineOrders: false,
+        closedMessage: "Loja fechada.",
+      },
+      businessHours: {},
+      delivery: { fee: 5, minimumOrder: 0 },
+      payments: { accepted: {} },
+      site: { headline: "Sorveteria da Manu", subtitle: "Peça online." },
+    },
+  };
+
+  assert.equal(shouldFetchStorefrontOnMount(), true);
+  assert.equal(shouldFetchStorefrontOnMount(initialData), false);
+  assert.equal(
+    shouldFetchStorefrontOnMount(undefined, {
+      code: "SUPABASE_UNAVAILABLE",
+      message: "Servidor indisponível.",
+    }),
+    false,
+  );
+  assert.deepEqual(parseStorefrontResponse({ success: true, ...initialData }), initialData);
+  assert.equal(parseStorefrontResponse({ success: true, store: initialData.store }), null);
+  assert.equal(parseStorefrontResponse({ success: true, ...initialData, settings: {} }), null);
+});
+
+test("separa rotas públicas das áreas internas", () => {
+  assert.equal(isInternalStoreRoute("/"), false);
+  assert.equal(isInternalStoreRoute("/delivery"), false);
+  assert.equal(isInternalStoreRoute("/pedidos/novo"), true);
+  assert.equal(isInternalStoreRoute("/configuracoes"), true);
 });
