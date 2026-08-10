@@ -9,13 +9,18 @@
   "scripts": {
     "dev": "npm run dev --workspace=@manu-platform/sorveteria",
     "dev:sorveteria": "npm run dev --workspace=@manu-platform/sorveteria",
-    "build": "npm run build --workspace=@manu-platform/sorveteria",
+    "build": "npm run build:sorveteria && npm run build:esfiharia",
     "build:sorveteria": "npm run build --workspace=@manu-platform/sorveteria",
+    "build:esfiharia": "npm run build --workspace=@manu-platform/esfiharia",
     "start": "npm run start --workspace=@manu-platform/sorveteria",
     "start:sorveteria": "npm run start --workspace=@manu-platform/sorveteria",
-    "lint": "npm run lint --workspace=@manu-platform/sorveteria",
+    "dev:esfiharia": "npm run dev --workspace=@manu-platform/esfiharia",
+    "start:esfiharia": "npm run start --workspace=@manu-platform/esfiharia",
+    "lint": "npm run lint:sorveteria && npm run lint:esfiharia",
     "lint:sorveteria": "npm run lint --workspace=@manu-platform/sorveteria",
-    "test": "npm run test --workspace=@manu-platform/sorveteria",
-    "test:sorveteria": "npm run test --workspace=@manu-platform/sorveteria"
+    "lint:esfiharia": "npm run lint --workspace=@manu-platform/esfiharia",
+    "test": "npm run test:sorveteria && npm run test:esfiharia",
+    "test:sorveteria": "npm run test --workspace=@manu-platform/sorveteria",
+    "test:esfiharia": "npm run test --workspace=@manu-platform/esfiharia"
   }
 }

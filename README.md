@@ -1,12 +1,12 @@
 # Manu Platform
 
-Monorepo da plataforma da Manu. Nesta etapa, a Sorveteria da Manu permanece como a única aplicação implementada; os demais diretórios apenas reservam a estrutura das evoluções futuras.
+Monorepo da plataforma da Manu, com frontends independentes para a Sorveteria e a Esfiharia sobre o mesmo Supabase multi-store.
 
 ## Estado atual
 
 - **Sorveteria:** implementada em `apps/sorveteria`.
-- **Esfiharia:** futura; ainda sem aplicação.
-- **API compartilhada:** futura; as rotas existentes continuam no app da Sorveteria.
+- **Esfiharia:** frontend inicial em `apps/esfiharia`, mantido em pré-lançamento enquanto a store estiver inativa.
+- **API compartilhada:** futura; cada frontend mantém Route Handlers finos, enquanto as regras críticas permanecem nas mesmas RPCs multi-store do Supabase.
 - **Pacotes compartilhados:** estrutura preparada, ainda sem extração de código.
 
 ## Estrutura
@@ -14,7 +14,7 @@ Monorepo da plataforma da Manu. Nesta etapa, a Sorveteria da Manu permanece como
 ```text
 apps/
   sorveteria/   Aplicação Next.js atual
-  esfiharia/    Aplicação futura
+  esfiharia/    Frontend inicial da Esfiharia
   api/          API compartilhada futura
 packages/
   domain/       Tipos e regras de negócio futuros
@@ -42,12 +42,22 @@ npm run dev:sorveteria
 
 A aplicação estará disponível em `http://localhost:3000`. O comando `npm run dev` foi preservado como atalho para a Sorveteria.
 
+## Como executar a Esfiharia
+
+```bash
+cp apps/esfiharia/.env.example apps/esfiharia/.env.local
+npm run dev:esfiharia
+```
+
+Configure `STORE_SLUG=esfiharia`. A store não é ativada automaticamente pelo frontend.
+
 ## Variáveis de ambiente
 
-O modelo compartilhado permanece em `.env.example`, na raiz. A configuração usada pelo Next.js deve ficar em:
+O modelo compartilhado permanece em `.env.example`, na raiz. A configuração usada por cada aplicação Next.js deve ficar em seu próprio arquivo:
 
 ```text
 apps/sorveteria/.env.local
+apps/esfiharia/.env.local
 ```
 
 Arquivos `.env` e `.env.local` são ignorados pelo Git em qualquer diretório. Não versione chaves reais e não duplique segredos sem necessidade.
@@ -59,16 +69,20 @@ Arquivos `.env` e `.env.local` são ignorados pelo Git em qualquer diretório. N
 
 Em desenvolvimento, a ausência das variáveis públicas ativa o modo de demonstração já existente. Em produção, todas as variáveis necessárias devem estar configuradas.
 
-## Comandos principais
+## Comandos por aplicação
 
 ```bash
 npm run dev:sorveteria
 npm run test:sorveteria
 npm run lint:sorveteria
 npm run build:sorveteria
+npm run dev:esfiharia
+npm run test:esfiharia
+npm run lint:esfiharia
+npm run build:esfiharia
 ```
 
-Os comandos anteriores continuam disponíveis na raiz e apontam para a Sorveteria:
+Os comandos agregados executam as verificações nas duas aplicações; `dev` e `start` continuam apontando para a Sorveteria por compatibilidade:
 
 ```bash
 npm test
@@ -93,4 +107,4 @@ As URLs públicas e internas continuam iguais, incluindo:
 
 ## Deploy
 
-O deploy não foi migrado nesta etapa. Quando a hospedagem for ajustada para o monorepo, o diretório-base do app da Sorveteria deverá ser `apps/sorveteria`.
+O deploy não foi alterado automaticamente. No Netlify, use package directory `apps/sorveteria` para a Sorveteria e `apps/esfiharia` para a Esfiharia. Cada site deve possuir `STORE_SLUG`, domínio e variáveis de ambiente próprias.
