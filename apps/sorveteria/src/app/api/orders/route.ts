@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { numericToNumber } from "@/data/mappers/numeric";
 import { createSupabaseAdminClient } from "@/data/supabase/admin";
 import { parsePublicOrderRequest, publicOrderError, toPublicOrderRpcPayload } from "@/lib/public-order";
+import { getCurrentStoreSlug } from "@/lib/store-config";
 
 export const runtime = "nodejs";
 
@@ -48,9 +49,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const client = createSupabaseAdminClient();
+    const storeSlug = getCurrentStoreSlug();
     const rateValues = { ip: getClientIp(request), phone: parsed.phone, idempotency: parsed.idempotencyKey };
     for (const rule of RATE_LIMITS) {
       const { data, error } = await client.rpc("consume_public_order_rate_limit", {
+        p_store_slug: storeSlug,
         p_rate_key: rateKey(rule.scope, rateValues[rule.scope]),
         p_limit: rule.limit,
         p_window_seconds: rule.windowSeconds,
@@ -60,6 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { data: order, error } = await client.rpc("create_public_order_with_tracking", {
+      p_store_slug: storeSlug,
       p_idempotency_key: parsed.idempotencyKey,
       p_request: toPublicOrderRpcPayload(parsed),
       p_tracking_token: parsed.trackingToken,

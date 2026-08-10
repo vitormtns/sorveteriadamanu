@@ -10,6 +10,9 @@ import {
 } from "../src/lib/public-order.ts";
 import { getOrderAgeLabel, getOrderItemDetails } from "../src/lib/order-operational.ts";
 import { shouldPollTracking, shouldRefreshForOrderEvent } from "../src/lib/order-sync.ts";
+import { getCurrentStoreSlug, normalizeStoreSlug } from "../src/lib/store-config.ts";
+import { filterByStore, realtimeStoreFilter, resourceIdsBelongToStore, totalByStore } from "../src/lib/store-scope.ts";
+import { numericToNumber } from "../src/data/mappers/numeric.ts";
 
 const ids = {
   format: "00000000-0000-4000-8000-000000000002",
@@ -17,6 +20,41 @@ const ids = {
   topping: "00000000-0000-4000-8000-000000000004",
   flavor: "00000000-0000-4000-8000-000000000005",
 };
+
+const storeIds = {
+  sorveteria: "00000000-0000-4000-8000-000000000001",
+  esfiharia: "00000000-0000-4000-8000-000000000002",
+};
+
+test("resolve a store fixa pelo ambiente do servidor", () => {
+  assert.equal(getCurrentStoreSlug({ STORE_SLUG: " Sorveteria " }), "sorveteria");
+  assert.equal(getCurrentStoreSlug({ STORE_SLUG: undefined }), "sorveteria");
+  assert.throws(() => normalizeStoreSlug("loja/inválida"), /formato inválido/);
+});
+
+test("filtra catálogo e pedidos pela store atual", () => {
+  const rows = [
+    { id: "s1", storeId: storeIds.sorveteria, total: 10 },
+    { id: "e1", storeId: storeIds.esfiharia, total: 99 },
+    { id: "s2", storeId: storeIds.sorveteria, total: 15 },
+  ];
+  assert.deepEqual(filterByStore(rows, storeIds.sorveteria).map((row) => row.id), ["s1", "s2"]);
+  assert.equal(totalByStore(rows, storeIds.sorveteria), 25);
+});
+
+test("rejeita builder com recurso de outra store", () => {
+  const resources = [
+    { id: "tamanho-sorveteria", storeId: storeIds.sorveteria },
+    { id: "tamanho-esfiharia", storeId: storeIds.esfiharia },
+  ];
+  assert.equal(resourceIdsBelongToStore(resources, ["tamanho-sorveteria"], storeIds.sorveteria), true);
+  assert.equal(resourceIdsBelongToStore(resources, ["tamanho-esfiharia"], storeIds.sorveteria), false);
+});
+
+test("gera filtro Realtime por store e converte valores numéricos do banco", () => {
+  assert.equal(realtimeStoreFilter(storeIds.sorveteria), `store_id=eq.${storeIds.sorveteria}`);
+  assert.equal(numericToNumber("16.90"), 16.9);
+});
 
 test("cobra apenas os adicionais de açaí acima da franquia", () => {
   assert.equal(calculateAcaiAddOnPrice([2, 2, 3, 4], 3), 4);

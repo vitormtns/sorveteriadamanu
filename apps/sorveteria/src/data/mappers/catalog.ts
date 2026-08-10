@@ -19,7 +19,7 @@ export function mapPromotionFromDatabase(row: DatabasePromotion): Promotion {
   };
 }
 
-export function mapPromotionInsertToDatabase(promotion: Omit<Promotion, "id" | "createdAt" | "updatedAt">): DatabasePromotionInsert {
+export function mapPromotionInsertToDatabase(promotion: Omit<Promotion, "id" | "createdAt" | "updatedAt">): Omit<DatabasePromotionInsert, "store_id"> {
   return {
     title: promotion.title,
     description: promotion.description,

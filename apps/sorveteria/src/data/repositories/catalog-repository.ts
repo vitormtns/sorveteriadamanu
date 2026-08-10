@@ -1,4 +1,4 @@
-import { ConfigurableItem, DeliveryBuilderOption, Product, Promotion } from "@/lib/types";
+import { ConfigurableItem, DeliveryBuilderOption, Product, Promotion, StoreIdentity } from "@/lib/types";
 import { mapAddOnFromDatabase, mapDeliveryBuilderOptionFromDatabase, mapFlavorFromDatabase, mapPromotionFromDatabase } from "@/data/mappers/catalog";
 import { mapProductFromDatabase } from "@/data/mappers/product";
 import { fail, ok, RepositoryClient, RepositoryResult } from "./types";
@@ -16,36 +16,41 @@ export interface CatalogRepository {
   getAvailableCatalog(): Promise<RepositoryResult<PublicCatalog>>;
 }
 
-export function createCatalogRepository(client: RepositoryClient): CatalogRepository {
+export function createCatalogRepository(client: RepositoryClient, store: StoreIdentity): CatalogRepository {
   return {
     async getAvailableCatalog() {
       const [productsResult, promotionsResult, addOnsResult, flavorsResult, builderOptionsResult] = await Promise.all([
         client
           .from("products")
           .select("*")
+          .eq("store_id", store.id)
           .eq("active", true)
           .eq("available_today", true)
           .order("display_order", { ascending: true }),
         client
           .from("promotions")
           .select("*")
+          .eq("store_id", store.id)
           .eq("active", true)
           .order("display_order", { ascending: true }),
         client
           .from("add_ons")
           .select("*")
+          .eq("store_id", store.id)
           .eq("active", true)
           .eq("available", true)
           .order("display_order", { ascending: true }),
         client
           .from("flavors")
           .select("*")
+          .eq("store_id", store.id)
           .eq("active", true)
           .eq("available", true)
           .order("display_order", { ascending: true }),
         client
           .from("delivery_builder_options")
           .select("*")
+          .eq("store_id", store.id)
           .eq("active", true)
           .eq("available", true)
           .order("display_order", { ascending: true }),

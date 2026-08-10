@@ -2,13 +2,14 @@
 
 import { createContext, ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { initialProducts } from "@/lib/mock-data";
-import { DeliveryBuilderOption, Product, StoreSettings } from "@/lib/types";
+import { DeliveryBuilderOption, Product, StoreIdentity, StoreSettings } from "@/lib/types";
 import { uid } from "@/lib/utils";
 import { initialDeliveryBuilderOptions, initialSettings, normalizeSettings } from "@/lib/settings";
 import { createBrowserSupabaseClient } from "@/data/supabase/browser";
-import { createCatalogRepository, createProductRepository, createSettingsRepository, RepositoryError } from "@/data/repositories";
+import { createProductRepository, createSettingsRepository, PublicCatalog, RepositoryError } from "@/data/repositories";
 
 interface StoreContextValue {
+  store: StoreIdentity;
   products: Product[];
   settings: StoreSettings;
   deliveryBuilderOptions: DeliveryBuilderOption[];
@@ -16,13 +17,21 @@ interface StoreContextValue {
   settingsSaving: boolean;
   dataError: string;
   ready: boolean;
-  saveProduct: (product: Omit<Product, "id" | "createdAt" | "updatedAt"> & { id?: string }) => Promise<boolean>;
+  saveProduct: (product: Omit<Product, "id" | "storeId" | "createdAt" | "updatedAt"> & { id?: string }) => Promise<boolean>;
   deleteProduct: (id: string) => Promise<boolean>;
   updateSettings: (update: Partial<StoreSettings> | ((current: StoreSettings) => StoreSettings)) => void;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 const INITIAL_LOAD_TIMEOUT_MS = 10_000;
+const DEMO_STORE: StoreIdentity = { id: "00000000-0000-4000-8000-000000000001", slug: "demo", name: "Sorveteria da Manu", type: "sorveteria" };
+
+interface StorefrontResponse {
+  success: boolean;
+  store: StoreIdentity;
+  catalog: PublicCatalog;
+  settings: StoreSettings;
+}
 
 async function withTimeout<T>(operation: PromiseLike<T>, timeoutMs = INITIAL_LOAD_TIMEOUT_MS): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -56,6 +65,7 @@ function settingsSaveMessage(error: RepositoryError): string {
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
+  const [store, setStore] = useState<StoreIdentity>(DEMO_STORE);
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [settings, setSettings] = useState<StoreSettings>(initialSettings);
   const [deliveryBuilderOptions, setDeliveryBuilderOptions] = useState<DeliveryBuilderOption[]>(initialDeliveryBuilderOptions);
@@ -83,31 +93,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
 
     void (async () => {
-      const catalogRepository = createCatalogRepository(client);
-      const settingsRepository = createSettingsRepository(client);
-      const [{ data: { session } }, catalog, publicSettings] = await withTimeout(Promise.all([
+      const [{ data: { session } }, response] = await withTimeout(Promise.all([
         client.auth.getSession(),
-        catalogRepository.getAvailableCatalog(),
-        settingsRepository.getPublic(),
+        fetch("/api/storefront", { cache: "no-store" }),
       ]));
-      if (catalog.error || publicSettings.error) throw new Error("Falha ao carregar os dados públicos da loja.");
+      const storefront = await response.json() as StorefrontResponse;
+      if (!response.ok || !storefront.success) throw new Error("Falha ao carregar os dados públicos da loja.");
+
+      const resolvedStore = storefront.store;
+      const catalog = storefront.catalog;
+      setStore(resolvedStore);
 
       let isOwner = false;
-      let loadedProducts = catalog.data.products;
-      let loadedSettings = publicSettings.data;
+      let loadedProducts = catalog.products;
+      let loadedSettings = storefront.settings;
       const user = session?.user;
 
       if (user) {
-        const { data: profile, error: profileError } = await withTimeout(
-          client.from("profiles").select("role, active").eq("id", user.id).maybeSingle(),
+        const { data: ownerAccess, error: accessError } = await withTimeout(
+          client.rpc("is_owner_of_store", { p_store_id: resolvedStore.id }),
         );
-        if (profileError) throw profileError;
-        isOwner = profile?.active === true && profile.role === "owner";
+        if (accessError) throw accessError;
+        isOwner = ownerAccess === true;
 
         if (isOwner) {
+          const settingsRepository = createSettingsRepository(client, resolvedStore);
           const [privateSettings, ownerProducts] = await withTimeout(Promise.all([
             settingsRepository.get(),
-            createProductRepository(client).list(),
+            createProductRepository(client, resolvedStore).list(),
           ]));
           if (privateSettings.error || ownerProducts.error) throw new Error("Falha ao carregar os dados administrativos da loja.");
           loadedSettings = privateSettings.data;
@@ -116,13 +129,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
 
       setProducts(loadedProducts);
-      setDeliveryBuilderOptions(catalog.data.deliveryBuilderOptions);
+      setDeliveryBuilderOptions(catalog.deliveryBuilderOptions);
       setSettings(normalizeSettings({
         ...loadedSettings,
-        promotions: isOwner ? loadedSettings.promotions : catalog.data.promotions,
-        acaiExtras: isOwner ? loadedSettings.acaiExtras : catalog.data.addOns,
-        iceCreamFlavors: isOwner ? loadedSettings.iceCreamFlavors : catalog.data.iceCreamFlavors,
-        milkshakeFlavors: isOwner ? loadedSettings.milkshakeFlavors : catalog.data.milkshakeFlavors,
+        promotions: isOwner ? loadedSettings.promotions : catalog.promotions,
+        acaiExtras: isOwner ? loadedSettings.acaiExtras : catalog.addOns,
+        iceCreamFlavors: isOwner ? loadedSettings.iceCreamFlavors : catalog.iceCreamFlavors,
+        milkshakeFlavors: isOwner ? loadedSettings.milkshakeFlavors : catalog.milkshakeFlavors,
       }));
       settingsLoaded.current = true;
       setReady(true);
@@ -148,7 +161,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             }
             return;
           }
-          const result = await createSettingsRepository(client).update(settings);
+          const result = await createSettingsRepository(client, store).update(settings);
           if (revision !== settingsRevision.current) return;
           setSettingsSaving(false);
           setSettingsSaveError(Boolean(result.error));
@@ -169,7 +182,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       });
     }, 650);
     return () => window.clearTimeout(timer);
-  }, [settings, ready]);
+  }, [settings, ready, store]);
 
   const saveProduct: StoreContextValue["saveProduct"] = async (input) => {
     const client = createBrowserSupabaseClient();
@@ -180,7 +193,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setProducts((current) => input.id ? current.map((item) => item.id === input.id ? { ...item, ...product, createdAt: item.createdAt } : item) : [product, ...current]);
       return true;
     }
-    const repository = createProductRepository(client);
+    const repository = createProductRepository(client, store);
     const result = input.id ? await repository.update(input.id, input) : await repository.create(input);
     if (result.error) { setDataError("Não foi possível salvar o produto."); return false; }
     setDataError("");
@@ -195,7 +208,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setProducts((current) => current.filter((item) => item.id !== id));
       return true;
     }
-    const result = await createProductRepository(client).delete(id);
+    const result = await createProductRepository(client, store).delete(id);
     if (result.error) { setDataError("Não foi possível excluir o produto."); return false; }
     setDataError("");
     setProducts((current) => current.filter((item) => item.id !== id));
@@ -219,7 +232,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   if (!ready) return <main role="status" className="grid min-h-screen place-items-center bg-[#fbf7f0] text-sm text-[var(--muted)]"><div className="grid justify-items-center gap-3"><span className="h-7 w-7 animate-spin rounded-full border-2 border-[#d8c7d9] border-t-[var(--purple)]" aria-hidden="true" />Carregando dados da sorveteria...</div></main>;
   if (initialLoadFailed) return <main className="grid min-h-screen place-items-center bg-[#fbf7f0] p-6 text-center"><div><h1 className="text-xl font-bold text-[var(--text)]">Não foi possível carregar a loja</h1><p className="mt-2 text-sm text-red-700">{dataError}</p><button type="button" onClick={() => window.location.reload()} className="mt-5 min-h-11 rounded-xl bg-[var(--purple)] px-5 text-sm font-bold text-white">Tentar novamente</button></div></main>;
-  return <StoreContext.Provider value={{ products, settings, deliveryBuilderOptions, settingsSaveError, settingsSaving, dataError, ready, saveProduct, deleteProduct, updateSettings }}>{children}</StoreContext.Provider>;
+  return <StoreContext.Provider value={{ store, products, settings, deliveryBuilderOptions, settingsSaveError, settingsSaving, dataError, ready, saveProduct, deleteProduct, updateSettings }}>{children}</StoreContext.Provider>;
 }
 
 export function useStore() {

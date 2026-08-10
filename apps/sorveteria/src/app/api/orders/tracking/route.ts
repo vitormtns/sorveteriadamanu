@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/data/supabase/admin";
+import { getCurrentStoreSlug } from "@/lib/store-config";
 
 export const runtime = "nodejs";
 
@@ -12,7 +13,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const client = createSupabaseAdminClient();
-    const { data, error } = await client.rpc("get_public_order_tracking", { p_public_code: code, p_tracking_token: token });
+    const { data, error } = await client.rpc("get_public_order_tracking", {
+      p_store_slug: getCurrentStoreSlug(),
+      p_public_code: code,
+      p_tracking_token: token,
+    });
     if (error || !data) return NextResponse.json({ success: false, error: { code: "TRACKING_NOT_FOUND", message: "Pedido não encontrado." } }, { status: 404 });
     return NextResponse.json({ success: true, order: data }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

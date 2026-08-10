@@ -1,9 +1,21 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+﻿export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 export type PostgresNumeric = number | string;
 
 export interface Database {
   public: {
     Tables: {
+      stores: {
+        Row: DatabaseStore;
+        Insert: DatabaseStoreInsert;
+        Update: DatabaseStoreUpdate;
+        Relationships: [];
+      };
+      profile_stores: {
+        Row: DatabaseProfileStore;
+        Insert: DatabaseProfileStoreInsert;
+        Update: DatabaseProfileStoreUpdate;
+        Relationships: [];
+      };
       profiles: {
         Row: DatabaseProfile;
         Insert: DatabaseProfileInsert;
@@ -80,6 +92,7 @@ export interface Database {
     Functions: {
       cancel_order: {
         Args: {
+          p_store_id: string;
           p_order_id: string;
           p_cancellation_reason: string;
         };
@@ -87,6 +100,7 @@ export interface Database {
       };
       create_internal_order: {
         Args: {
+          p_store_id: string;
           p_customer_name: string;
           p_payment_method: DatabasePaymentMethod;
           p_items: Json;
@@ -102,6 +116,7 @@ export interface Database {
       };
       consume_public_order_rate_limit: {
         Args: {
+          p_store_slug: string;
           p_rate_key: string;
           p_limit: number;
           p_window_seconds: number;
@@ -110,6 +125,7 @@ export interface Database {
       };
       create_public_order: {
         Args: {
+          p_store_slug: string;
           p_idempotency_key: string;
           p_request: Json;
         };
@@ -117,6 +133,7 @@ export interface Database {
       };
       create_public_order_with_tracking: {
         Args: {
+          p_store_slug: string;
           p_idempotency_key: string;
           p_request: Json;
           p_tracking_token: string;
@@ -125,6 +142,7 @@ export interface Database {
       };
       get_public_order_tracking: {
         Args: {
+          p_store_slug: string;
           p_public_code: string;
           p_tracking_token: string;
         };
@@ -150,8 +168,13 @@ export interface Database {
         Args: Record<string, never>;
         Returns: boolean;
       };
+      can_access_store: { Args: { p_store_id: string }; Returns: boolean };
+      is_owner_of_store: { Args: { p_store_id: string }; Returns: boolean };
+      can_access_order: { Args: { p_order_id: string }; Returns: boolean };
+      is_owner_of_order: { Args: { p_order_id: string }; Returns: boolean };
       save_store_configuration: {
         Args: {
+          p_store_id: string;
           p_settings: Json;
           p_business_hours: Json;
           p_promotions: Json;
@@ -162,6 +185,7 @@ export interface Database {
       };
       update_order_status: {
         Args: {
+          p_store_id: string;
           p_order_id: string;
           p_new_status: DatabaseOrderStatus;
           p_cancellation_reason?: string | null;
@@ -170,6 +194,7 @@ export interface Database {
       };
       update_payment_status: {
         Args: {
+          p_store_id: string;
           p_order_id: string;
           p_payment_status: DatabasePaymentStatus;
         };
@@ -199,6 +224,22 @@ export type DatabaseOrderOrigin = "internal" | "delivery";
 export type DatabaseDeliveryType = "pickup" | "delivery";
 export type DatabaseFlavorProductType = "ice_cream" | "milkshake";
 
+export type DatabaseStore = {
+  id: string;
+  slug: string;
+  name: string;
+  type: "sorveteria" | "esfiharia";
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+export type DatabaseStoreInsert = Omit<DatabaseStore, "created_at" | "updated_at"> & { created_at?: string; updated_at?: string };
+export type DatabaseStoreUpdate = Partial<DatabaseStoreInsert>;
+
+export type DatabaseProfileStore = { profile_id: string; store_id: string; created_at: string };
+export type DatabaseProfileStoreInsert = Omit<DatabaseProfileStore, "created_at"> & { created_at?: string };
+export type DatabaseProfileStoreUpdate = Partial<DatabaseProfileStoreInsert>;
+
 export type DatabaseProfile = {
   id: string;
   name: string;
@@ -221,6 +262,7 @@ export type DatabaseProfileUpdate = Partial<DatabaseProfileInsert>;
 
 export type DatabaseProduct = {
   id: string;
+  store_id: string;
   name: string;
   category: DatabaseProductCategory;
   description: string | null;
@@ -243,6 +285,7 @@ export type DatabaseProductUpdate = Partial<DatabaseProductInsert>;
 
 export type DatabaseOrder = {
   id: string;
+  store_id: string;
   public_code: string;
   customer_name: string;
   phone: string | null;
@@ -317,7 +360,7 @@ export type DatabaseOrderStatusHistoryInsert = Omit<DatabaseOrderStatusHistory, 
 export type DatabaseOrderStatusHistoryUpdate = Partial<DatabaseOrderStatusHistoryInsert>;
 
 export type DatabaseStoreSettings = {
-  id: boolean;
+  store_id: string;
   delivery_open: boolean;
   pause_online_orders: boolean;
   temporary_pause: boolean;
@@ -349,6 +392,8 @@ export type DatabaseStoreSettingsInsert = Omit<DatabaseStoreSettings, "created_a
 export type DatabaseStoreSettingsUpdate = Partial<DatabaseStoreSettingsInsert>;
 
 export type DatabasePublicStoreSettings = {
+  store_id: string;
+  store_slug: string;
   delivery_open: boolean;
   pause_online_orders: boolean;
   temporary_pause: boolean;
@@ -372,6 +417,7 @@ export type DatabasePublicStoreSettings = {
 
 export type DatabaseBusinessHour = {
   id: string;
+  store_id: string;
   weekday: number;
   enabled: boolean;
   open_time: string;
@@ -389,6 +435,7 @@ export type DatabaseBusinessHourUpdate = Partial<DatabaseBusinessHourInsert>;
 
 export type DatabasePromotion = {
   id: string;
+  store_id: string;
   title: string;
   description: string;
   price: PostgresNumeric;
@@ -411,6 +458,7 @@ export type DatabasePromotionUpdate = Partial<DatabasePromotionInsert>;
 
 export type DatabaseAddOn = {
   id: string;
+  store_id: string;
   name: string;
   active: boolean;
   available: boolean;
@@ -429,6 +477,7 @@ export type DatabaseAddOnUpdate = Partial<DatabaseAddOnInsert>;
 
 export type DatabaseFlavor = {
   id: string;
+  store_id: string;
   name: string;
   product_type: DatabaseFlavorProductType;
   active: boolean;
@@ -451,6 +500,7 @@ export type DatabaseDeliveryBuilderOptionType = "size" | "format" | "scoop" | "t
 
 export type DatabaseDeliveryBuilderOption = {
   id: string;
+  store_id: string;
   builder_type: DatabaseDeliveryBuilderType;
   option_type: DatabaseDeliveryBuilderOptionType;
   code: string;

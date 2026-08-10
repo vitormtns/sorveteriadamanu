@@ -1,4 +1,4 @@
-import { PostgresNumeric } from "@/data/supabase/database.types";
+import type { PostgresNumeric } from "../supabase/database.types";
 
 export function numericToNumber(value: PostgresNumeric | null | undefined): number {
   if (value === null || value === undefined) return 0;

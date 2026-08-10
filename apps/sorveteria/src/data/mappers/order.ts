@@ -32,6 +32,7 @@ export function mapOrderFromDatabase(row: DatabaseOrder, items: DatabaseOrderIte
 
   return {
     id: row.id,
+    storeId: row.store_id,
     publicCode: row.public_code,
     customerName: row.customer_name,
     phone: row.phone ?? undefined,
@@ -86,7 +87,7 @@ export function mapOrderStatusHistoryFromDatabase(row: DatabaseOrderStatusHistor
   };
 }
 
-export function mapOrderInsertToDatabase(order: OrderCreateInput): DatabaseOrderInsert {
+export function mapOrderInsertToDatabase(order: OrderCreateInput): Omit<DatabaseOrderInsert, "store_id"> {
   const subtotal = order.subtotal ?? order.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const deliveryFee = order.deliveryFee ?? 0;
   const discount = order.discount ?? 0;
@@ -131,8 +132,9 @@ export function mapOrderItemInsertToDatabase(orderId: string, item: OrderItem): 
   };
 }
 
-export function mapOrderCreateInputToRpcArgs(order: OrderCreateInput): CreateInternalOrderRpcArgs {
+export function mapOrderCreateInputToRpcArgs(order: OrderCreateInput, storeId: string): CreateInternalOrderRpcArgs {
   return {
+    p_store_id: storeId,
     p_customer_name: order.customerName,
     p_phone: order.phone ?? null,
     p_notes: order.notes ?? null,

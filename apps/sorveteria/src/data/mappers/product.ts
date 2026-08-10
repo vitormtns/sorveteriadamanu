@@ -5,6 +5,7 @@ import { moneyToDatabase, numericToNumber } from "./numeric";
 export function mapProductFromDatabase(row: DatabaseProduct): Product {
   return {
     id: row.id,
+    storeId: row.store_id,
     name: row.name,
     category: row.category,
     description: row.description ?? undefined,
@@ -19,7 +20,7 @@ export function mapProductFromDatabase(row: DatabaseProduct): Product {
   };
 }
 
-export function mapProductInsertToDatabase(product: Omit<Product, "id" | "createdAt" | "updatedAt">): DatabaseProductInsert {
+export function mapProductInsertToDatabase(product: Omit<Product, "id" | "storeId" | "createdAt" | "updatedAt">): Omit<DatabaseProductInsert, "store_id"> {
   return {
     name: product.name,
     category: product.category,
@@ -33,7 +34,7 @@ export function mapProductInsertToDatabase(product: Omit<Product, "id" | "create
   };
 }
 
-export function mapProductUpdateToDatabase(product: Partial<Omit<Product, "id" | "createdAt" | "updatedAt">>): DatabaseProductUpdate {
+export function mapProductUpdateToDatabase(product: Partial<Omit<Product, "id" | "storeId" | "createdAt" | "updatedAt">>): DatabaseProductUpdate {
   return {
     name: product.name,
     category: product.category,

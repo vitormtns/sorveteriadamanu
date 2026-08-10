@@ -1,4 +1,4 @@
-import { Promotion } from "@/lib/types";
+import { Promotion, StoreIdentity } from "@/lib/types";
 import { mapPromotionFromDatabase, mapPromotionInsertToDatabase, mapPromotionUpdateToDatabase } from "@/data/mappers/catalog";
 import { fail, ok, RepositoryClient, RepositoryResult } from "./types";
 
@@ -8,12 +8,13 @@ export interface PromotionRepository {
   update(id: string, patch: Partial<Omit<Promotion, "id" | "createdAt" | "updatedAt">>): Promise<RepositoryResult<Promotion>>;
 }
 
-export function createPromotionRepository(client: RepositoryClient): PromotionRepository {
+export function createPromotionRepository(client: RepositoryClient, store: StoreIdentity): PromotionRepository {
   return {
     async list() {
       const { data, error } = await client
         .from("promotions")
         .select("*")
+        .eq("store_id", store.id)
         .order("display_order", { ascending: true })
         .order("created_at", { ascending: false });
 
@@ -24,7 +25,7 @@ export function createPromotionRepository(client: RepositoryClient): PromotionRe
     async create(promotion) {
       const { data, error } = await client
         .from("promotions")
-        .insert(mapPromotionInsertToDatabase(promotion))
+        .insert({ ...mapPromotionInsertToDatabase(promotion), store_id: store.id })
         .select("*")
         .single();
 
@@ -37,6 +38,7 @@ export function createPromotionRepository(client: RepositoryClient): PromotionRe
         .from("promotions")
         .update(mapPromotionUpdateToDatabase(patch))
         .eq("id", id)
+        .eq("store_id", store.id)
         .select("*")
         .single();
 

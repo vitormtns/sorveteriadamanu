@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getCurrentStoreSlug } from "@/lib/store-config";
 
 const protectedPaths = ["/sistema", "/pedidos", "/produtos", "/configuracoes"];
 
@@ -34,6 +35,17 @@ export async function proxy(request: NextRequest) {
     .maybeSingle();
 
   if (!profile || !profile.active || profile.role !== "owner") {
+    await supabase.auth.signOut();
+    return isLogin ? response : redirectWithCookies(new URL("/login?erro=conta", request.url), response);
+  }
+
+  const { data: store } = await supabase
+    .from("stores")
+    .select("id")
+    .eq("slug", getCurrentStoreSlug())
+    .eq("active", true)
+    .maybeSingle();
+  if (!store) {
     await supabase.auth.signOut();
     return isLogin ? response : redirectWithCookies(new URL("/login?erro=conta", request.url), response);
   }

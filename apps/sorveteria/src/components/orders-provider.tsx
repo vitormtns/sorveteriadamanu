@@ -9,6 +9,8 @@ import { OrderCreateInput } from "@/data/mappers/order";
 import { createOrderRepository } from "@/data/repositories/order-repository";
 import { RepositoryError, RepositoryResult } from "@/data/repositories/types";
 import { createBrowserSupabaseClient } from "@/data/supabase/browser";
+import { useStore } from "@/components/store-provider";
+import { realtimeStoreFilter } from "@/lib/store-scope";
 
 type RealtimeStatus = "idle" | "connecting" | "subscribed" | "reconnecting" | "error" | "closed";
 
@@ -47,6 +49,7 @@ function logRealtime(status: string, error?: Error) {
 }
 
 export function OrdersProvider({ children }: { children: ReactNode }) {
+  const { store } = useStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -55,6 +58,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
   const [historyByOrder, setHistoryByOrder] = useState<Record<string, OrderStatusHistoryEntry[]>>({});
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("idle");
   const client = useMemo(() => createBrowserSupabaseClient(), []);
+  const repository = useMemo(() => client ? createOrderRepository(client, store) : null, [client, store]);
   const currentTime = useCurrentTime();
   const latestRefresh = useRef<Promise<void>>(Promise.resolve());
   const refreshVersion = useRef(0);
@@ -75,7 +79,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
 
     if (mounted.current) setLoading(true);
     const run = async () => {
-      const result = await createOrderRepository(client).list();
+      const result = await repository!.list();
       if (!mounted.current || requestVersion !== refreshVersion.current) return;
       if (result.error) {
         setError(message(result.error));
@@ -94,7 +98,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         setReady(true);
       });
     await latestRefresh.current;
-  }, [client]);
+  }, [client, repository]);
 
   useEffect(() => {
     if (!client) {
@@ -146,16 +150,16 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         await refreshOrders();
         if (disposed) return;
 
-        const channelName = `orders-operation-${crypto.randomUUID()}`;
+        const channelName = `orders-operation-${store.id}-${crypto.randomUUID()}`;
+        const filter = realtimeStoreFilter(store.id);
         const nextChannel = client
           .channel(channelName)
-          .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
+          .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders", filter }, (payload) => {
             if (disposed || channel !== nextChannel) return;
-            if (payload.eventType === "DELETE") {
-              const deletedId = typeof payload.old.id === "string" ? payload.old.id : undefined;
-              if (deletedId) setOrders((current) => current.filter((order) => order.id !== deletedId));
-              return;
-            }
+            if (shouldRefreshForOrderEvent(payload.eventType)) scheduleRefresh();
+          })
+          .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter }, (payload) => {
+            if (disposed || channel !== nextChannel) return;
             if (shouldRefreshForOrderEvent(payload.eventType)) scheduleRefresh();
           });
 
@@ -231,7 +235,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
       void disconnect();
     };
-  }, [client, refreshOrders]);
+  }, [client, refreshOrders, store.id]);
 
   const runAction = useCallback(async (id: string, operation: () => Promise<RepositoryResult<Order>>) => {
     setActioningOrderId(id);
@@ -258,14 +262,14 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
   const getOrderHistory = useCallback(async (id: string) => {
     if (historyByOrder[id]) return historyByOrder[id];
     if (!client) return [];
-    const result = await createOrderRepository(client).findHistory(id);
+    const result = await repository!.findHistory(id);
     if (result.error) {
       setError(message(result.error));
       return [];
     }
     setHistoryByOrder((current) => ({ ...current, [id]: result.data }));
     return result.data;
-  }, [client, historyByOrder]);
+  }, [client, historyByOrder, repository]);
 
   const value: OrdersContextValue = {
     orders,
@@ -298,7 +302,7 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
 
       setActioningOrderId("new");
       try {
-        const result = await createOrderRepository(client).create(order);
+        const result = await repository!.create(order);
         if (result.error) {
           setError(message(result.error));
           return null;
@@ -310,9 +314,9 @@ export function OrdersProvider({ children }: { children: ReactNode }) {
         setActioningOrderId(null);
       }
     },
-    updateOperationalStatus: (id, status) => client ? runAction(id, () => createOrderRepository(client).updateOperationalStatus(id, status)) : Promise.resolve(false),
-    updatePaymentStatus: (id, status) => client ? runAction(id, () => createOrderRepository(client).updatePaymentStatus(id, status)) : Promise.resolve(false),
-    cancelOrder: (id, reason) => client ? runAction(id, () => createOrderRepository(client).cancel(id, reason)) : Promise.resolve(false),
+    updateOperationalStatus: (id, status) => repository ? runAction(id, () => repository.updateOperationalStatus(id, status)) : Promise.resolve(false),
+    updatePaymentStatus: (id, status) => repository ? runAction(id, () => repository.updatePaymentStatus(id, status)) : Promise.resolve(false),
+    cancelOrder: (id, reason) => repository ? runAction(id, () => repository.cancel(id, reason)) : Promise.resolve(false),
   };
 
   return <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>;

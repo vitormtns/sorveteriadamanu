@@ -9,9 +9,18 @@ export type DeliveryType = "pickup" | "delivery";
 export type FlavorProductType = "ice_cream" | "milkshake";
 export type DeliveryBuilderType = "acai" | "ice_cream" | "milkshake";
 export type DeliveryBuilderOptionType = "size" | "format" | "scoop" | "topping";
+export type StoreType = "sorveteria" | "esfiharia";
+
+export interface StoreIdentity {
+  id: string;
+  slug: string;
+  name: string;
+  type: StoreType;
+}
 
 export interface Product {
   id: string;
+  storeId?: string;
   name: string;
   category: ProductCategory;
   description?: string;
@@ -135,6 +144,7 @@ export interface OrderStatusHistoryEntry {
 
 export interface Order {
   id: string;
+  storeId?: string;
   customerName: string;
   phone?: string;
   items: OrderItem[];

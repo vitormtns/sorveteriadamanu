@@ -1,4 +1,4 @@
-import { Order, OrderStatus, OrderStatusHistoryEntry, PaymentStatus } from "@/lib/types";
+import { Order, OrderStatus, OrderStatusHistoryEntry, PaymentStatus, StoreIdentity } from "@/lib/types";
 import {
   mapOrderFromDatabase,
   mapOrderStatusHistoryFromDatabase,
@@ -19,7 +19,7 @@ export interface OrderRepository {
   cancel(id: string, reason: string): Promise<RepositoryResult<Order>>;
 }
 
-export function createOrderRepository(client: RepositoryClient): OrderRepository {
+export function createOrderRepository(client: RepositoryClient, store: StoreIdentity): OrderRepository {
   async function mapOrdersWithItems(rows: DatabaseOrder[]): Promise<RepositoryResult<Order[]>> {
     if (!rows.length) return ok([]);
 
@@ -46,6 +46,7 @@ export function createOrderRepository(client: RepositoryClient): OrderRepository
     const { data, error } = await client
       .from("orders")
       .select("*")
+      .eq("store_id", store.id)
       .eq(column, value)
       .maybeSingle();
 
@@ -70,16 +71,19 @@ export function createOrderRepository(client: RepositoryClient): OrderRepository
         client
           .from("orders")
           .select("*")
+          .eq("store_id", store.id)
           .order("created_at", { ascending: false })
           .limit(100),
         client
           .from("orders")
           .select("*")
+          .eq("store_id", store.id)
           .in("order_status", ["new", "preparing", "ready"])
           .order("created_at", { ascending: false }),
         client
           .from("orders")
           .select("*")
+          .eq("store_id", store.id)
           .eq("payment_status", "pending")
           .neq("order_status", "canceled")
           .order("created_at", { ascending: false }),
@@ -122,7 +126,7 @@ export function createOrderRepository(client: RepositoryClient): OrderRepository
         return fail("Pedido deve ter pelo menos um item.");
       }
 
-      const { data: orderId, error } = await client.rpc("create_internal_order", mapOrderCreateInputToRpcArgs(order));
+      const { data: orderId, error } = await client.rpc("create_internal_order", mapOrderCreateInputToRpcArgs(order, store.id));
 
       if (error) return fail(error);
       return reloadOrder(orderId);
@@ -131,6 +135,7 @@ export function createOrderRepository(client: RepositoryClient): OrderRepository
     async updateOperationalStatus(id, status, cancellationReason) {
       const { data, error } = await client
         .rpc("update_order_status", {
+          p_store_id: store.id,
           p_order_id: id,
           p_new_status: status,
           p_cancellation_reason: cancellationReason ?? null,
@@ -142,6 +147,7 @@ export function createOrderRepository(client: RepositoryClient): OrderRepository
 
     async updatePaymentStatus(id, status) {
       const { data, error } = await client.rpc("update_payment_status", {
+        p_store_id: store.id,
         p_order_id: id,
         p_payment_status: status,
       });
@@ -151,7 +157,7 @@ export function createOrderRepository(client: RepositoryClient): OrderRepository
     },
 
     async cancel(id, reason) {
-      const { data, error } = await client.rpc("cancel_order", { p_order_id: id, p_cancellation_reason: reason });
+      const { data, error } = await client.rpc("cancel_order", { p_store_id: store.id, p_order_id: id, p_cancellation_reason: reason });
       if (error) return fail(error);
       return reloadOrder(data.id);
     },

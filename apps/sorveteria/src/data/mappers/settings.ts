@@ -55,7 +55,7 @@ export function mapStoreSettingsFromDatabase(row: DatabaseStoreSettings, hours: 
 
 export function mapPublicStoreSettingsFromDatabase(row: DatabasePublicStoreSettings, hours: DatabaseBusinessHour[] = []): StoreSettings {
   return mapStoreSettingsFromDatabase({
-    id: true,
+    store_id: row.store_id,
     delivery_open: row.delivery_open,
     pause_online_orders: row.pause_online_orders,
     temporary_pause: row.temporary_pause,
@@ -108,7 +108,7 @@ export function mapStoreSettingsUpdateToDatabase(settings: StoreSettings): Datab
   };
 }
 
-export function mapBusinessHoursToDatabase(settings: StoreSettings): DatabaseBusinessHourInsert[] {
+export function mapBusinessHoursToDatabase(settings: StoreSettings): Omit<DatabaseBusinessHourInsert, "store_id">[] {
   return weekdayKeys.map((key, weekday) => ({
     weekday,
     enabled: settings.businessHours[key].enabled,

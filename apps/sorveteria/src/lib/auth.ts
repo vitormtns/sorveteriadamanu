@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from "@/data/supabase/server";
 import { redirect } from "next/navigation";
+import { getCurrentStoreSlug } from "@/lib/store-config";
 
 export async function getAuthenticatedUser() {
   const supabase = await createServerSupabaseClient();
@@ -13,7 +14,9 @@ export async function getActiveOwnerProfile() {
   if (!authenticated) return null;
   const { data: profile } = await authenticated.supabase.from("profiles").select("id, name, role, active").eq("id", authenticated.user.id).maybeSingle();
   if (!profile || !profile.active || profile.role !== "owner") return null;
-  return { ...authenticated, profile };
+  const { data: store } = await authenticated.supabase.from("stores").select("id").eq("slug", getCurrentStoreSlug()).eq("active", true).maybeSingle();
+  if (!store) return null;
+  return { ...authenticated, profile, store };
 }
 
 export async function requireActiveOwner() {

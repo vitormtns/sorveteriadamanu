@@ -1,4 +1,4 @@
-import { StoreSettings } from "@/lib/types";
+import { StoreIdentity, StoreSettings } from "@/lib/types";
 import { mapAddOnFromDatabase, mapFlavorFromDatabase, mapPromotionFromDatabase } from "@/data/mappers/catalog";
 import { mapBusinessHoursToDatabase, mapPublicStoreSettingsFromDatabase, mapStoreSettingsFromDatabase, mapStoreSettingsUpdateToDatabase } from "@/data/mappers/settings";
 import { fail, ok, RepositoryClient, RepositoryResult } from "./types";
@@ -22,14 +22,14 @@ export interface SettingsRepository {
   update(settings: StoreSettings): Promise<RepositoryResult<StoreSettings>>;
 }
 
-export function createSettingsRepository(client: RepositoryClient): SettingsRepository {
+export function createSettingsRepository(client: RepositoryClient, store: StoreIdentity): SettingsRepository {
   async function get(): Promise<RepositoryResult<StoreSettings>> {
     const [settingsResult, hoursResult, promotionsResult, addOnsResult, flavorsResult] = await Promise.all([
-      client.from("store_settings").select("*").eq("id", true).single(),
-      client.from("business_hours").select("*").order("weekday", { ascending: true }),
-      client.from("promotions").select("*").order("display_order", { ascending: true }),
-      client.from("add_ons").select("*").order("display_order", { ascending: true }),
-      client.from("flavors").select("*").order("display_order", { ascending: true }),
+      client.from("store_settings").select("*").eq("store_id", store.id).single(),
+      client.from("business_hours").select("*").eq("store_id", store.id).order("weekday", { ascending: true }),
+      client.from("promotions").select("*").eq("store_id", store.id).order("display_order", { ascending: true }),
+      client.from("add_ons").select("*").eq("store_id", store.id).order("display_order", { ascending: true }),
+      client.from("flavors").select("*").eq("store_id", store.id).order("display_order", { ascending: true }),
     ]);
 
     if (settingsResult.error) return settingsFailure(settingsResult.error, "select", "store_settings");
@@ -55,8 +55,8 @@ export function createSettingsRepository(client: RepositoryClient): SettingsRepo
 
     async getPublic() {
       const [settingsResult, hoursResult] = await Promise.all([
-        client.from("public_store_settings").select("*").single(),
-        client.from("business_hours").select("*").order("weekday", { ascending: true }),
+        client.from("public_store_settings").select("*").eq("store_id", store.id).single(),
+        client.from("business_hours").select("*").eq("store_id", store.id).order("weekday", { ascending: true }),
       ]);
 
       if (settingsResult.error) return settingsFailure(settingsResult.error, "select", "public_store_settings");
@@ -89,6 +89,7 @@ export function createSettingsRepository(client: RepositoryClient): SettingsRepo
       }));
 
       const { error } = await client.rpc("save_store_configuration", {
+        p_store_id: store.id,
         p_settings: mapStoreSettingsUpdateToDatabase(settings) as unknown as Json,
         p_business_hours: mapBusinessHoursToDatabase(settings) as unknown as Json,
         p_promotions: promotionRows as unknown as Json,
