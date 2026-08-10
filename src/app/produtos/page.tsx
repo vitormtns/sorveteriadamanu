@@ -10,17 +10,22 @@ import { formatCurrency } from "@/lib/utils";
 const categories: ProductCategory[] = ["Açaí", "Sorvetes", "Milk-shakes", "Sobremesas", "Promoções", "Bebidas", "Outros"];
 
 export default function ProductsPage() {
-  const { products, saveProduct, deleteProduct } = useStore();
+  const { products, saveProduct, deleteProduct, dataError } = useStore();
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Product | null | undefined>(undefined);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState("");
   const visible = products
     .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setFeedback("");
     const data = new FormData(event.currentTarget);
-    saveProduct({
+    const saved = await saveProduct({
       id: editing?.id,
       name: String(data.get("name")),
       category: data.get("category") as ProductCategory,
@@ -30,7 +35,11 @@ export default function ProductsPage() {
       featured: data.get("featured") === "on",
       displayOrder: Number(data.get("displayOrder")) || 0,
     });
-    setEditing(undefined);
+    setSaving(false);
+    if (saved) {
+      setEditing(undefined);
+      setFeedback("Produto salvo com sucesso.");
+    }
   }
 
   return <div className="grid min-w-0 max-w-full gap-6 overflow-x-clip">
@@ -43,11 +52,13 @@ export default function ProductsPage() {
         <Plus size={18} /> Adicionar produto
       </Button>
     </div>
+    {(dataError || feedback) && <p role="status" className={`rounded-xl p-3 text-sm ${dataError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{dataError || feedback}</p>}
     <div className="relative min-w-0 max-w-xl">
       <Search className="absolute left-4 top-3.5 text-slate-400" size={20} />
       <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar produto..." className="pl-11" />
     </div>
     <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {!visible.length && <p className="text-sm text-[var(--muted)]">Nenhum produto encontrado.</p>}
       {visible.map((product) => <Card key={product.id} className="internal-metric group min-w-0 overflow-hidden p-4 sm:p-5">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <div className="flex min-w-0 items-center gap-3 sm:flex-1 sm:gap-4">
@@ -75,7 +86,7 @@ export default function ProductsPage() {
     {editing !== undefined && <div className="fixed inset-0 z-50 grid place-items-end bg-slate-950/40 p-0 sm:place-items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && setEditing(undefined)}>
       <form onSubmit={submit} className="max-h-[calc(100svh-1rem)] w-full max-w-[calc(100vw-1rem)] overflow-y-auto rounded-t-2xl border border-[var(--border)] bg-white p-5 shadow-[0_16px_48px_rgba(22,5,31,.14)] sm:max-w-lg sm:rounded-2xl sm:p-6">
         <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-bold">{editing ? "Editar produto" : "Novo produto"}</h3><button type="button" aria-label="Fechar" onClick={() => setEditing(undefined)}><X /></button></div>
-        <div className="grid gap-4"><Field label="Nome do produto"><Input name="name" required defaultValue={editing?.name} placeholder="Ex.: Açaí 300 ml" /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Categoria"><Select name="category" defaultValue={editing?.category}>{categories.map((category) => <option key={category}>{category}</option>)}</Select></Field><Field label="Preço"><Input name="price" inputMode="decimal" required defaultValue={editing?.price} placeholder="0,00" /></Field></div><Field label="Ordem de exibição"><Input name="displayOrder" type="number" min="0" defaultValue={editing?.displayOrder ?? products.length + 1} /></Field><div className="grid gap-3 sm:grid-cols-3"><label className="flex items-center gap-3 font-semibold"><input className="h-5 w-5 accent-[var(--purple)]" name="active" type="checkbox" defaultChecked={editing?.active ?? true} /> Ativo</label><label className="flex items-center gap-3 font-semibold"><input className="h-5 w-5 accent-[var(--purple)]" name="availableToday" type="checkbox" defaultChecked={editing?.availableToday ?? true} /> Disponível hoje</label><label className="flex items-center gap-3 font-semibold"><input className="h-5 w-5 accent-[var(--purple)]" name="featured" type="checkbox" defaultChecked={editing?.featured ?? false} /> Destaque</label></div><Button className="mt-2 w-full" type="submit">Salvar produto</Button></div>
+        <div className="grid gap-4"><Field label="Nome do produto"><Input name="name" required defaultValue={editing?.name} placeholder="Ex.: Açaí 300 ml" /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Categoria"><Select name="category" defaultValue={editing?.category}>{categories.map((category) => <option key={category}>{category}</option>)}</Select></Field><Field label="Preço"><Input name="price" inputMode="decimal" required defaultValue={editing?.price} placeholder="0,00" /></Field></div><Field label="Ordem de exibição"><Input name="displayOrder" type="number" min="0" defaultValue={editing?.displayOrder ?? products.length + 1} /></Field><div className="grid gap-3 sm:grid-cols-3"><label className="flex items-center gap-3 font-semibold"><input className="h-5 w-5 accent-[var(--purple)]" name="active" type="checkbox" defaultChecked={editing?.active ?? true} /> Ativo</label><label className="flex items-center gap-3 font-semibold"><input className="h-5 w-5 accent-[var(--purple)]" name="availableToday" type="checkbox" defaultChecked={editing?.availableToday ?? true} /> Disponível hoje</label><label className="flex items-center gap-3 font-semibold"><input className="h-5 w-5 accent-[var(--purple)]" name="featured" type="checkbox" defaultChecked={editing?.featured ?? false} /> Destaque</label></div><Button className="mt-2 w-full" type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar produto"}</Button></div>
       </form>
     </div>}
   </div>;

@@ -4,6 +4,7 @@ import { ClipboardList, IceCreamBowl, LayoutGrid, LogOut, Plus, Settings } from 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "./brand-logo";
+import { createClient } from "@/lib/supabase/client";
 
 const links = [
   { href: "/sistema", label: "Início", icon: LayoutGrid },
@@ -15,7 +16,13 @@ const links = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  if (pathname === "/" || pathname === "/delivery" || pathname === "/login" || pathname.startsWith("/acompanhar/") || pathname.endsWith("/imprimir")) return children;
+  if (pathname === "/" || pathname === "/delivery" || pathname === "/login" || pathname === "/recuperar-senha" || pathname === "/redefinir-senha" || pathname.startsWith("/acompanhar/") || pathname.endsWith("/imprimir")) return children;
+
+  async function logout() {
+    await createClient()?.auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  }
 
   const title = pathname === "/sistema" ? "Visão geral" : pathname.includes("/novo") ? "Novo pedido" : pathname.startsWith("/produtos") ? "Produtos" : pathname.startsWith("/configuracoes") ? "Configurações da loja" : "Pedidos";
   const now = new Date();
@@ -38,7 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
-        <button onClick={() => router.push("/login")} className="mt-auto flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-purple-300 hover:bg-white/5 hover:text-white"><LogOut size={18} /> Sair</button>
+        <button onClick={logout} className="mt-auto flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-purple-300 hover:bg-white/5 hover:text-white"><LogOut size={18} /> Sair</button>
       </aside>
       <main className="min-w-0 lg:pl-56">
         <header className="sticky top-0 z-20 border-b border-white/10 bg-[var(--purple-dark)] px-5 text-white backdrop-blur-md md:px-7 lg:border-[var(--border)] lg:bg-[#fbf7f0]/90 lg:text-[var(--text)] lg:px-9">
@@ -46,7 +53,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mx-auto flex h-[68px] max-w-[1440px] items-center justify-between lg:h-[76px]">
             <div><h1 className="text-[19px] font-bold tracking-[-0.025em] md:text-[22px]">{title}</h1><p className="mt-0.5 text-[11px] font-normal text-purple-200 lg:text-[var(--muted)] md:text-[13px]">{today}</p></div>
             <Link href="/pedidos/novo" className="hidden sm:block"><span className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-[var(--yellow)] px-4 text-sm font-semibold text-[var(--purple-dark)] transition hover:bg-[#e8ad00]"><Plus size={18} /> Novo pedido</span></Link>
-            <Link href="/sistema" className="sm:hidden"><BrandLogo compact /></Link>
+            <div className="flex items-center gap-2 sm:hidden"><Link href="/sistema"><BrandLogo compact /></Link><button type="button" onClick={logout} aria-label="Sair" className="grid h-10 w-10 place-items-center rounded-xl text-purple-100 hover:bg-white/10"><LogOut size={19} /></button></div>
           </div>
         </header>
         <div className="internal-content mx-auto min-w-0 max-w-[1440px] px-4 py-5 pb-[calc(7.5rem+env(safe-area-inset-bottom))] sm:px-5 md:p-7 lg:p-9">{children}</div>

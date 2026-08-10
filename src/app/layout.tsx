@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { StoreProvider } from "@/components/store-provider";
+import { OrdersProvider } from "@/components/orders-provider";
 import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
@@ -19,7 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="pt-BR">
       <body className={jakarta.variable}>
-        <StoreProvider><AppShell>{children}</AppShell></StoreProvider>
+        <StoreProvider><OrdersProvider><AppShell>{children}</AppShell></OrdersProvider></StoreProvider>
       </body>
     </html>
   );

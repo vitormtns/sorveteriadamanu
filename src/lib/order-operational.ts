@@ -1,4 +1,4 @@
-import { Order, OrderStatus } from "./types";
+import type { Order, OrderItem, OrderStatus } from "./types";
 
 export type OrderQueueContext = "default" | "prepare" | "deliver" | "collect";
 
@@ -27,18 +27,69 @@ export function splitOrderItemName(productName: string) {
   };
 }
 
-export function getOrderAgeLabel(order: Order) {
-  const createdAt = new Date(order.createdAt);
-  const minutes = Math.max(0, Math.floor((Date.now() - createdAt.getTime()) / 60000));
-  const arrivedAt = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(createdAt);
+function namesFrom(value: unknown): string[] {
+  if (typeof value === "string") return value.trim() ? [value.trim()] : [];
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (typeof item === "string") return item.trim() ? [item.trim()] : [];
+    if (item && typeof item === "object" && "name" in item && typeof item.name === "string") return item.name.trim() ? [item.name.trim()] : [];
+    return [];
+  });
+}
 
+function namedDetail(value: unknown): string | undefined {
+  if (typeof value === "string") return value.trim() || undefined;
+  if (value && typeof value === "object" && "name" in value && typeof value.name === "string") return value.name.trim() || undefined;
+  return undefined;
+}
+
+export function getOrderItemDetails(item: OrderItem): string[] {
+  const details = item.details ?? {};
+  const result = [...splitOrderItemName(item.productName).details];
+  const flavors = namesFrom(details.flavors);
+  const addOns = namesFrom(details.addOns);
+  const freeAddOns = namesFrom(details.freeAddOns);
+  const paidAddOns = namesFrom(details.paidAddOns);
+  const topping = namedDetail(details.topping);
+  const promotion = details.promotion;
+
+  if (flavors.length) result.push(`${flavors.length === 1 ? "Sabor" : "Sabores"}: ${flavors.join(", ")}`);
+  if (addOns.length) result.push(`Adicionais: ${addOns.join(", ")}`);
+  if (freeAddOns.length) result.push(`Inclusos: ${freeAddOns.join(", ")}`);
+  if (paidAddOns.length) result.push(`Adicionais pagos: ${paidAddOns.join(", ")}`);
+  if (topping) result.push(`Cobertura: ${topping}`);
+  if (promotion && typeof promotion === "object" && "description" in promotion && typeof promotion.description === "string" && promotion.description.trim()) {
+    result.push(promotion.description.trim());
+  }
+  if (item.notes?.trim()) result.push(`Obs. do item: ${item.notes.trim()}`);
+
+  return [...new Set(result)];
+}
+
+function formatElapsedTime(startedAt: string, currentTime: number): string {
+  const minutes = Math.max(0, Math.floor((currentTime - new Date(startedAt).getTime()) / 60_000));
+  if (minutes === 0) return "Agora";
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours === 0) return `há ${minutes} min`;
+  if (remainingMinutes === 0) return `há ${hours} h`;
+  return `há ${hours} h ${remainingMinutes} min`;
+}
+
+export function getOrderAgeLabel(order: Order, currentTime = Date.now()) {
   if (order.orderStatus === "ready") {
-    if (minutes < 60) return `Pronto há ${minutes || 1} min`;
-    return `Pronto há ${Math.floor(minutes / 60)} h`;
+    const elapsed = formatElapsedTime(order.readyAt ?? order.createdAt, currentTime);
+    return elapsed === "Agora" ? "Pronto agora" : `Pronto ${elapsed}`;
   }
 
-  if (minutes < 60) return `Aguardando há ${minutes || 1} min`;
-  return `Chegou às ${arrivedAt}`;
+  if (order.orderStatus === "preparing") {
+    const elapsed = formatElapsedTime(order.preparingAt ?? order.createdAt, currentTime);
+    return elapsed === "Agora" ? "Em preparo agora" : `Em preparo ${elapsed}`;
+  }
+
+  const elapsed = formatElapsedTime(order.createdAt, currentTime);
+  return elapsed === "Agora" ? "Agora" : `Aguardando ${elapsed}`;
 }
 
 export function getOperationalTaskLabel(order: Order, context: OrderQueueContext) {

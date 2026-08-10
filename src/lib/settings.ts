@@ -1,4 +1,4 @@
-import { PaymentMethod, StoreSettings, WeekdayKey } from "./types";
+import { DeliveryBuilderOption, PaymentMethod, StoreSettings, WeekdayKey } from "./types";
 
 const standardHours = { enabled: true, open: "12:00", close: "22:00" };
 
@@ -44,13 +44,15 @@ export const initialSettings: StoreSettings = {
   },
   delivery: {
     fee: 5,
+    minimumOrder: 0,
+    freeAddOnsQuantity: 3,
   },
   payments: {
     accepted: {
       Pix: true,
       Dinheiro: true,
       Cartão: true,
-      "Fiado/Outro": true,
+      "A combinar": true,
     },
     pixKey: "",
     note: "",
@@ -113,8 +115,32 @@ export const paymentLabels: Record<PaymentMethod, string> = {
   Pix: "Pix",
   Dinheiro: "Dinheiro",
   Cartão: "Cartão",
-  "Fiado/Outro": "A combinar",
+  "A combinar": "A combinar",
 };
+
+// Dados exclusivos do modo de demonstração quando o Supabase não está configurado.
+const demoDeliveryBuilderOptions: Array<[DeliveryBuilderOption["builderType"], DeliveryBuilderOption["optionType"], string, string, number, number | undefined]> = [
+  ["acai", "size", "300ml", "300 ml", 14, undefined], ["acai", "size", "500ml", "500 ml", 19, undefined], ["acai", "size", "700ml", "700 ml", 25, undefined], ["acai", "size", "1l", "1 litro", 34, undefined],
+  ["ice_cream", "format", "cup", "Copo", 0, undefined], ["ice_cream", "format", "cone", "Casquinha", 0, undefined],
+  ["ice_cream", "scoop", "one", "1 bola", 7, 1], ["ice_cream", "scoop", "two", "2 bolas", 12, 2], ["ice_cream", "scoop", "three", "3 bolas", 16, 3],
+  ["ice_cream", "topping", "chocolate", "Chocolate", 0, undefined], ["ice_cream", "topping", "strawberry", "Morango", 0, undefined], ["ice_cream", "topping", "condensed-milk", "Leite condensado", 0, undefined], ["ice_cream", "topping", "sprinkles", "Granulado", 0, undefined], ["ice_cream", "topping", "none", "Sem cobertura", 0, undefined],
+  ["milkshake", "size", "300ml", "300 ml", 12, undefined], ["milkshake", "size", "500ml", "500 ml", 17, undefined], ["milkshake", "size", "700ml", "700 ml", 22, undefined],
+];
+
+export const initialDeliveryBuilderOptions: DeliveryBuilderOption[] = demoDeliveryBuilderOptions.map(([builderType, optionType, code, name, price, maxFlavors], index) => ({
+  id: `demo-builder-${code}-${index}`,
+  builderType,
+  optionType,
+  code,
+  name,
+  price,
+  maxFlavors,
+  active: true,
+  available: true,
+  displayOrder: index + 1,
+  createdAt: "",
+  updatedAt: "",
+}));
 
 export function normalizeSettings(saved?: Partial<StoreSettings> | null): StoreSettings {
   if (!saved) return initialSettings;
@@ -122,6 +148,16 @@ export function normalizeSettings(saved?: Partial<StoreSettings> | null): StoreS
   if (site.whatsapp === "(00) 00000-0000") site.whatsapp = "";
   if (site.address === "Endereço em atualização") site.address = "";
   if (site.displayedHours === "Consulte o horário do dia") site.displayedHours = initialSettings.site.displayedHours;
+  const savedAccepted = saved.payments?.accepted as Partial<Record<PaymentMethod | "Fiado/Outro", boolean>> | undefined;
+  const accepted = {
+    ...initialSettings.payments.accepted,
+    ...savedAccepted,
+  };
+  if (typeof savedAccepted?.["Fiado/Outro"] === "boolean") {
+    accepted["A combinar"] = savedAccepted["Fiado/Outro"];
+  }
+  delete (accepted as Partial<Record<"Fiado/Outro", boolean>>)["Fiado/Outro"];
+
   return {
     ...initialSettings,
     ...saved,
@@ -135,11 +171,13 @@ export function normalizeSettings(saved?: Partial<StoreSettings> | null): StoreS
     ) as StoreSettings["businessHours"],
     delivery: {
       fee: Math.max(0, Number(saved.delivery?.fee ?? initialSettings.delivery.fee) || 0),
+      minimumOrder: Math.max(0, Number(saved.delivery?.minimumOrder ?? initialSettings.delivery.minimumOrder) || 0),
+      freeAddOnsQuantity: Math.max(0, Math.floor(Number(saved.delivery?.freeAddOnsQuantity ?? initialSettings.delivery.freeAddOnsQuantity) || 0)),
     },
     payments: {
       ...initialSettings.payments,
       ...saved.payments,
-      accepted: { ...initialSettings.payments.accepted, ...saved.payments?.accepted },
+      accepted,
     },
     promotions: saved.promotions ?? initialSettings.promotions,
     acaiExtras: saved.acaiExtras ?? initialSettings.acaiExtras,
