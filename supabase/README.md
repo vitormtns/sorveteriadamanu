@@ -30,7 +30,7 @@ O seed não cria pedidos fictícios nem dados pessoais reais. Ele é idempotente
 
 ## Variáveis de ambiente
 
-Copie `.env.example` para `.env.local`:
+Copie `.env.example`, da raiz do monorepo, para `apps/sorveteria/.env.local`:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
@@ -62,10 +62,10 @@ Nesta etapa, o sistema aceita somente um perfil `owner` ativo e não possui gest
 Quando o projeto remoto estiver criado, gere tipos a partir do banco:
 
 ```bash
-supabase gen types typescript --project-id SEU_PROJECT_ID --schema public > src/data/supabase/database.types.ts
+supabase gen types typescript --project-id SEU_PROJECT_ID --schema public > apps/sorveteria/src/data/supabase/database.types.ts
 ```
 
-O arquivo atual `src/data/supabase/database.types.ts` foi escrito para ser compatível com esta migration e pode ser substituído por tipos gerados quando a CLI estiver configurada.
+O arquivo atual `apps/sorveteria/src/data/supabase/database.types.ts` foi escrito para ser compatível com esta migration e pode ser substituído por tipos gerados quando a CLI estiver configurada.
 
 ## Decisões de modelagem
 
@@ -94,10 +94,9 @@ Todas as tabelas públicas estão com RLS ativada.
 
 ## Próximos passos
 
-- Não expor acompanhamento público só por `public_code`; use `public_code` com telefone normalizado ou token público para evitar enumeração e vazamento de telefone/endereço.
-- Conectar gradualmente as telas aos repositórios em `src/data/repositories`.
-- Adicionar testes automatizados para mappers e operações críticas quando a infraestrutura de testes for escolhida.
-- Implementar Realtime e impressão em tarefas separadas.
+- Manter os tipos em `apps/sorveteria/src/data/supabase/database.types.ts` sincronizados com a evolução do banco.
+- Ampliar a cobertura automatizada dos mappers e das operações críticas.
+- Planejar o compartilhamento da base com as futuras operações sem alterar migrations já aplicadas.
 
 ## Integração atual da aplicação
 
@@ -105,9 +104,9 @@ Nesta versão existe somente um usuário `owner` e não há gestão de usuários
 
 Configure a **Site URL** e autorize `/auth/callback` nas **Redirect URLs** para o endereço local e o domínio de produção. O callback troca o código PKCE por uma sessão antes de encaminhar de `/recuperar-senha` para `/redefinir-senha`.
 
-As rotas internas são protegidas por `src/proxy.ts`, que atualiza cookies e exige profile `owner` ativo. A autenticação comum usa somente a anon key; a service role permanece exclusiva do servidor.
+As rotas internas são protegidas por `apps/sorveteria/src/proxy.ts`, que atualiza cookies e exige profile `owner` ativo. A autenticação comum usa somente a anon key; a service role permanece exclusiva do servidor.
 
-Supabase é a fonte de verdade para autenticação, profiles, produtos, configurações, horários, promoções, adicionais e sabores. Pedidos, acompanhamento, filas, fechamento e impressão continuam no `localStorage` nesta etapa.
+Supabase é a fonte de verdade para autenticação, profiles, produtos, configurações, horários, promoções, adicionais, sabores, pedidos e histórico de status. O painel operacional recebe atualizações de pedidos por Realtime, enquanto o acompanhamento público consulta a rota segura de tracking com polling controlado.
 
 O salvamento da tela de configurações usa a RPC `save_store_configuration`, criada pela migration `202607140002_atomic_store_configuration.sql`, para persistir configurações, horários, promoções, adicionais e sabores em uma única transação.
 
